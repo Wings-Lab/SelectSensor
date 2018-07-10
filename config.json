@@ -1,4 +1,6 @@
 {
     "grid_length":"50",
-    "sensor_number":"200"
+    "sensor_number":"200",
+    "priori_mean":"25 25",
+    "priori_cov":"250 0 0 250"
 }
