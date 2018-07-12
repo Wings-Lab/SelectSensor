@@ -4,3 +4,4 @@ __pycache__
 artificial_samples.csv
 sensor.txt
 testing.csv
+.vscode

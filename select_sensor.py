@@ -20,11 +20,12 @@ class SelectSensor:
         config (json):       configurations - settings and parameters
         sen_num (int):       the number of sensors
         grid_len (int):      the length of the grid
-        grid (np.ndarray):   the element is the probability of data - transmitter
+        grid (np.ndarray):   the element is the probability of hypothesis - transmitter
         transmitters (list): a 2D list of Transmitter
         sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitters
         data (ndarray):      a 2D array of observation data
         covariance (list):   a 2D list of covariance. each data share a same covariance matrix
+        mean_stds (dict):    assume sigal between a transmitter-sensor pair is normal distributed
     '''
     def __init__(self, filename):
         self.config = read_config(filename)
@@ -37,6 +38,7 @@ class SelectSensor:
         self.covariance = []
         self.init_transmitters()
         self.set_priori()
+        self.means_stds = {}
 
 
     def set_priori(self):
@@ -78,11 +80,11 @@ class SelectSensor:
                 f.write(self.sensors[key].output())
 
 
-    def read_init_sensor(self):
+    def read_init_sensor(self, filename):
         '''Read location of sensors and init the sensors
         '''
         self.sensors = {}
-        with open('sensor.txt', 'r') as f:
+        with open(filename, 'r') as f:
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
@@ -90,38 +92,57 @@ class SelectSensor:
                 self.sensors[(x, y)] = Sensor(x, y)
 
 
-    def data_imputation(self):
-        '''Since we don't have the real data yet, we make up some fake data
-           Then save them in a csv file
+    def mean_std_output(self):
+        '''test mean std input output
         '''
-        means_stds = {}   # assume data of one pair of transmitter-sensor is normal distributed
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
-                tran_x, tran_y = transmitter.x, transmitter.y
-                for sensor in self.sensors:
-                    sen_x, sen_y = sensor[0], sensor[1]   # key -> value, key is enough to get (x,y)
-                    dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
-                    dist = 1e-2 if dist < 1e-2 else dist  # in case distance is zero
-                    mean = 300/dist + 5
-                    std = random.uniform(3, 5)
-                    means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
-        data = []
-        i = 0
-        while i < 100: # sample 1000 times
+        with open('mean_std.txt', 'w') as f:
             for transmitter_list in self.transmitters:
                 for transmitter in transmitter_list:
                     tran_x, tran_y = transmitter.x, transmitter.y
-                    data = []
                     for sensor in self.sensors:
-                        sen_x, sen_y = sensor[0], sensor[1]
-                        mean, std = means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                        data.append(round(np.random.normal(mean, std), 3))   # 0.123
-                    data.append(data)
-            if int(i%5) == 0:
-                print(i)
-            i += 1
+                        sen_x, sen_y = sensor[0], sensor[1]   # key -> value, key is enough to get (x,y)
+                        dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
+                        dist = 1e-2 if dist < 1e-2 else dist  # in case distance is zero
+                        mean = 800/dist + 2
+                        std = random.uniform(1, 2)
+                        f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
+
+
+    def read_mean_std(self, filename):
+        '''read mean std information between transmitters and sensors
+        '''
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split(' ')
+                tran_x, tran_y = int(line[0]), int(line[1])
+                sen_x, sen_y = int(line[2]), int(line[3])
+                mean, std = float(line[4]), float(line[5])
+                self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
+
+
+    def generate_data(self):
+        '''Since we don't have the real data yet, we make up some artificial data
+           Then save them in a csv file. also save the mean vector
+        '''
+        data = []
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
+                tran_x, tran_y = transmitter.x, transmitter.y
+                for sensor in self.sensors:  # for each transmitter, send signal to all sensors
+                    sen_x, sen_y = sensor[0], sensor[1]
+                    mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                    temp_data = []
+                    i = 0
+                    while i < 100:  # sample 100 times
+                        temp_data.append(round(np.random.normal(mean, std), 3))   # 0.123
+                        i += 1
+                    transmitter.add_mean_vec(np.array(temp_data).mean()) # the mean here is from real data
+                    data.append(temp_data)
+                transmitter.write_mean_vec('mean_vector.txt')
+
         data_pd = pd.DataFrame(data)
-        data_pd.to_csv('./artificial_samples.csv', index=False, header=False)
+        data_pd.to_csv('artificial_samples.csv', index=False, header=False)
 
 
     def compute_multivariant_gaussian(self):
@@ -156,12 +177,22 @@ class SelectSensor:
 def main():
     '''main
     '''
+
     select_sensor = SelectSensor('config.json')
-    select_sensor.read_init_sensor()
-    select_sensor.compute_multivariant_gaussian()
+
+    
+    #select_sensor.read_init_sensor('sensor.txt')
+    #select_sensor.mean_std_output()
+    
+    
+    select_sensor.read_init_sensor('sensor.txt')
+    select_sensor.read_mean_std('mean_std.txt')
+    select_sensor.generate_data()
+    
+
+    #select_sensor.compute_multivariant_gaussian()
     #select_sensor.init_random_sensors()
     #select_sensor.save_sensor()
-    #select_sensor.data_imputation()
     #select_sensor.print()
 
 
