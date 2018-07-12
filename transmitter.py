@@ -17,16 +17,10 @@ class Transmitter:
         self.multivariant_gaussian = None
 
 
-    def add_mean_vec(self, mean):
-        '''add a mean to mean vector
-        '''
-        self.mean_vec.append(mean)
-
-
     def write_mean_vec(self, filename):
         '''append the mean vector to filename
         '''
-        with open(filename, 'a') as f:
+        with open(filename, 'a') as f:      # when the file already exists, it will not overwirte
             f.write(str(self.mean_vec) + '\n')
 
 

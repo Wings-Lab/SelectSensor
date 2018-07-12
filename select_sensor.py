@@ -125,23 +125,27 @@ class SelectSensor:
         '''Since we don't have the real data yet, we make up some artificial data
            Then save them in a csv file. also save the mean vector
         '''
-        data = []
+        total_data = []
         for transmitter_list in self.transmitters:
             for transmitter in transmitter_list:
                 tran_x, tran_y = transmitter.x, transmitter.y
-                for sensor in self.sensors:  # for each transmitter, send signal to all sensors
-                    sen_x, sen_y = sensor[0], sensor[1]
-                    mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                    temp_data = []
-                    i = 0
-                    while i < 100:  # sample 100 times
-                        temp_data.append(round(np.random.normal(mean, std), 3))   # 0.123
-                        i += 1
-                    transmitter.add_mean_vec(np.array(temp_data).mean()) # the mean here is from real data
-                    data.append(temp_data)
+                data = []
+                i = 0
+                while i < 100:                   # sample 100 times for each transmitter
+                    one_transmitter = []
+                    for sensor in self.sensors:  # for each transmitter, send signal to all sensors
+                        sen_x, sen_y = sensor[0], sensor[1]
+                        mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                        one_transmitter.append(round(np.random.normal(mean, std), 3))   # 0.123
+                    data.append(one_transmitter)
+                    total_data.append(one_transmitter)
+                    i += 1
+                data = np.array(data)
+                mean_vec = data.mean(axis=0).tolist()
+                setattr(transmitter, 'mean_vec', mean_vec)
                 transmitter.write_mean_vec('mean_vector.txt')
 
-        data_pd = pd.DataFrame(data)
+        data_pd = pd.DataFrame(total_data)
         data_pd.to_csv('artificial_samples.csv', index=False, header=False)
 
 
