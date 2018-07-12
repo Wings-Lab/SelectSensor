@@ -2,8 +2,9 @@
 Select sensor and detect transmitter
 '''
 import random
-import traceback
+#import traceback
 import numpy as np
+import pandas as pd
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
 from sensor import Sensor
@@ -19,46 +20,30 @@ class SelectSensor:
         config (json):       configurations - settings and parameters
         sen_num (int):       the number of sensors
         grid_len (int):      the length of the grid
+        grid (np.ndarray):   the element is the probability of data - transmitter
         transmitters (list): a 2D list of Transmitter
         sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitters
-        grid (np.ndarray):   the element is the probability of hypothesis - transmitter
-        priori_mean (list):  list of mean of the priori 2D normal distribution
-        priori_cov  (list):  list of covariance of the priori 2D normal distribution
-        data (list):         a 2D list of observation data
+        data (ndarray):      a 2D array of observation data
+        covariance (list):   a 2D list of covariance. each data share a same covariance matrix
     '''
     def __init__(self, filename):
         self.config = read_config(filename)
         self.sen_num = int(self.config["sensor_number"])
         self.grid_len = int(self.config["grid_length"])
+        self.grid = np.zeros(0)
         self.transmitters = []
         self.sensors = {}
-        self.init_random_sensors()
+        self.data = np.zeros(0)
+        self.covariance = []
         self.init_transmitters()
         self.set_priori()
-        self.data = []
 
 
     def set_priori(self):
-        '''Set priori distribution - 2D normal distribution
-           The mean and covariance come from configuration file
+        '''Set priori distribution - uniform distribution
         '''
-        x, y = np.mgrid[0:50:1, 0:50:1]
-        pos = np.zeros(x.shape + (2,))
-        pos[:, :, 0] = x
-        pos[:, :, 1] = y
-
-        try:
-            mean = self.config['priori_mean']
-            mean = mean.split()
-            cov = self.config['priori_cov']
-            cov = cov.split()
-            self.priori_mean = [float(mean[0]), float(mean[1])]
-            self.priori_cov = [[float(cov[0]), float(cov[1])], [float(cov[2]), float(cov[3])]]
-            self.grid = multivariate_normal(self.priori_mean, self.priori_cov).pdf(pos)
-        except IndexError:
-            traceback.print_exc()
-        except Exception:
-            traceback.print_exc()
+        uniform = 1./(self.grid_len * self.grid_len)
+        self.grid = np.full((self.grid_len, self.grid_len), uniform)
 
 
     def init_transmitters(self):
@@ -81,58 +66,103 @@ class SelectSensor:
             if self.sensors.get((x, y)):
                 continue
             else:    # no sensor exists at (x,y)
-                #dist = distance.euclidean([x, y], [self.transmitter.x, self.transmitter.y])
                 self.sensors[(x, y)] = Sensor(x, y)
                 i += 1
 
 
+    def save_sensor(self):
+        '''Save location of sensors
+        '''
+        with open('sensor.txt', 'w') as f:
+            for key in self.sensors:
+                f.write(self.sensors[key].output())
+
+
+    def read_init_sensor(self):
+        '''Read location of sensors and init the sensors
+        '''
+        self.sensors = {}
+        with open('sensor.txt', 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split(' ')
+                x, y = int(line[0]), int(line[1])
+                self.sensors[(x, y)] = Sensor(x, y)
+
+
     def data_imputation(self):
         '''Since we don't have the real data yet, we make up some fake data
+           Then save them in a csv file
         '''
         means_stds = {}   # assume data of one pair of transmitter-sensor is normal distributed
-        for transmitter in self.transmitters:
-            tran_x, tran_y = transmitter.x, transmitter.y
-            for sensor in self.sensors:
-                sen_x, sen_y = sensor.x, sensor.y
-                dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
-                dist = 1e-3 if dist < 1e-3 else dist  # in case distance is zero
-                mean = 1/dist
-                std = random.uniform(3, 5)
-                means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
-        i = 0
-        while i < 1000: # sample 1000 times, each time 2500 rows with 200 columns
-            for transmitter in self.transmitters:
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
                 tran_x, tran_y = transmitter.x, transmitter.y
-                hypothesis = []
                 for sensor in self.sensors:
-                    sen_x, sen_y = sensor.x, sensor.y
-                    mean, std = means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                    hypothesis.append(np.random.normal(mean, std))
+                    sen_x, sen_y = sensor[0], sensor[1]   # key -> value, key is enough to get (x,y)
+                    dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
+                    dist = 1e-2 if dist < 1e-2 else dist  # in case distance is zero
+                    mean = 300/dist + 5
+                    std = random.uniform(3, 5)
+                    means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
+        data = []
+        i = 0
+        while i < 100: # sample 1000 times
+            for transmitter_list in self.transmitters:
+                for transmitter in transmitter_list:
+                    tran_x, tran_y = transmitter.x, transmitter.y
+                    data = []
+                    for sensor in self.sensors:
+                        sen_x, sen_y = sensor[0], sensor[1]
+                        mean, std = means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                        data.append(round(np.random.normal(mean, std), 3))   # 0.123
+                    data.append(data)
+            if int(i%5) == 0:
+                print(i)
             i += 1
+        data_pd = pd.DataFrame(data)
+        data_pd.to_csv('./artificial_samples.csv', index=False, header=False)
 
 
-
-
-    def compute_posterior(self):
-        '''Given priori probability and observation data, compute posterior probability
+    def compute_multivariant_gaussian(self):
+        '''Given observation data, compute the guassian function.
+           Each hypothesis corresponds to a single gaussian function
+           with different mean but the same covariance.
         '''
+        data = pd.read_csv('./artificial_samples.csv', header=None)
+        self.covariance = np.cov(data.as_matrix().T)
+        print('Computed covariance!')
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
+                tran_x, tran_y = transmitter.x, transmitter.y
+                mean_vector = []
+                for sensor in self.sensors:
+                    sen_x, sen_y = sensor[0], sensor[1]   # key -> value, key is enough to get (x,y)
+                    dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
+                    dist = 1e-2 if dist < 1e-2 else dist  # in case distance is zero
+                    mean = 300/dist + 5
+                    mean_vector.append(round(mean, 3))    # generate mean vector
+                transmitter.multivariant_gaussian = multivariate_normal(mean=mean_vector, cov=self.covariance)
 
 
     def print(self):
         '''Print for testing
         '''
-        print('sensors:\n')
-        for key in self.sensors:
-            print(self.sensors[key])
-        print('\nhypothesis:\n')
+        print('\ndata:\n')
         print(self.grid.shape, '\n', self.grid)
+        print(self.covariance)
 
 
 def main():
     '''main
     '''
     select_sensor = SelectSensor('config.json')
-    select_sensor.print()
+    select_sensor.read_init_sensor()
+    select_sensor.compute_multivariant_gaussian()
+    #select_sensor.init_random_sensors()
+    #select_sensor.save_sensor()
+    #select_sensor.data_imputation()
+    #select_sensor.print()
 
 
 if __name__ == '__main__':

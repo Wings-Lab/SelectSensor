@@ -1,3 +1,6 @@
 .DS_Store
 .ipynb_checkpoints
 __pycache__
+artificial_samples.csv
+sensor.txt
+testing.csv

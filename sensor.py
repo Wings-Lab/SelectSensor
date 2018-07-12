@@ -16,6 +16,19 @@ class Sensor:
         return  "(%d, %d)" % (self.x, self.y)
 
 
-if __name__ == '__main__':
+    def output(self):
+        '''Output into files
+        '''
+        return "%d %d\n" % (self.x, self.y)
+
+
+def main():
+    '''Main
+    '''
     sensor = Sensor(1, 3)
-    print(sensor)
+    s = sensor.output()
+    print(s)
+
+
+if __name__ == '__main__':
+    main()
