@@ -2,6 +2,7 @@
 Select sensor and detect transmitter
 '''
 import random
+import math
 #import traceback
 import numpy as np
 import pandas as pd
@@ -67,10 +68,10 @@ class SelectSensor:
         while i < self.sen_num:
             x = random.randint(0, self.grid_len-1) # randomly find a place for a sensor
             y = random.randint(0, self.grid_len-1)
-            if self.sensors.get((x, y)):
+            if self.sensors.get((x, y)): # a sensor exists at (x, y)
                 continue
-            else:    # no sensor exists at (x,y)
-                self.sensors[(x, y)] = Sensor(x, y)
+            else:                        # no sensor exists at (x,y)
+                self.sensors[(x, y)] = Sensor(x, y, random.uniform(1, 2))
                 i += 1
 
 
@@ -90,8 +91,8 @@ class SelectSensor:
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
-                x, y = int(line[0]), int(line[1])
-                self.sensors[(x, y)] = Sensor(x, y)
+                x, y, std = int(line[0]), int(line[1]), float(line[2])
+                self.sensors[(x, y)] = Sensor(x, y, std)
 
 
     def mean_std_output(self):
@@ -101,12 +102,11 @@ class SelectSensor:
             for transmitter_list in self.transmitters:
                 for transmitter in transmitter_list:
                     tran_x, tran_y = transmitter.x, transmitter.y
-                    for sensor in self.sensors:
-                        sen_x, sen_y = sensor[0], sensor[1]   # key -> value, key is enough to get (x,y)
+                    for key in self.sensors:
+                        sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                         dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
-                        dist = 1e-2 if dist < 1e-2 else dist  # in case distance is zero
-                        mean = 800/dist + 2
-                        std = random.uniform(1, 2)
+                        dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
+                        mean = 100 - 20*math.log(2*dist)
                         f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
@@ -123,20 +123,8 @@ class SelectSensor:
                 self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
 
 
-    def read_mean_vector(self, filename):
-        '''read the mean vector
-        '''
-        with open(filename, 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                line = line[1:-2]
-                line = line.split(', ')
-                line = [float(i) for i in line]
-                print(line)
-
-
     def generate_data(self):
-        '''Since we don't have the real data yet, we make up some artificial data
+        '''Since we don't have the real data yet, we make up some artificial data according to mean_std.txt
            Then save them in a csv file. also save the mean vector
         '''
         total_data = []
@@ -150,7 +138,7 @@ class SelectSensor:
                     for sensor in self.sensors:  # for each transmitter, send signal to all sensors
                         sen_x, sen_y = sensor[0], sensor[1]
                         mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                        one_transmitter.append(round(np.random.normal(mean, std), 3))   # 0.123
+                        one_transmitter.append(round(np.random.normal(mean, std), 4))   # 0.1234
                     data.append(one_transmitter)
                     total_data.append(one_transmitter)
                     i += 1
@@ -178,6 +166,7 @@ class SelectSensor:
                     line = line[1:-2]
                     line = line.split(', ')
                     mean_vector = [float(i) for i in line]
+                    setattr(transmitter, 'mean_vec', mean_vector)
                     setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=mean_vector, cov=self.covariance))
 
 
@@ -191,6 +180,8 @@ class SelectSensor:
         for transmitter_list in self.transmitters:
             for transmitter in transmitter_list:
                 tran_x, tran_y = transmitter.x, transmitter.y
+                if tran_x == tran_y:
+                    print(tran_x)
                 i = 0
                 while i < 10:  # test 10 times for each transmitter
                     data = []
@@ -200,17 +191,22 @@ class SelectSensor:
                         data.append(round(np.random.normal(mean, std), 3))
                     for transmitter_list2 in self.transmitters:
                         for transmitter2 in transmitter_list2:  # given hypothesis, the probability of data
-                            multivariate_gaussaion = transmitter2.multivariate_gaussaion # see which hypothesis is "best"
+                            multivariant_gaussian = transmitter2.multivariant_gaussian # see which hypothesis is "best"
                             tran_x2, tran_y2 = transmitter2.x, transmitter2.y
-                            self.grid_posterior[tran_x2][tran_y2] = multivariate_gaussaion.pdf(data) * self.grid_priori[tran_x2][tran_y2]
+                            likelihood = multivariant_gaussian.pdf(data)
+                            self.grid_posterior[tran_x2][tran_y2] = likelihood * self.grid_priori[tran_x2][tran_y2]
 
                     denominator = self.grid_posterior.sum()   # we could neglect denominator
+                    if denominator <= 0:
+                        continue
+
                     self.grid_posterior = self.grid_posterior/denominator
 
                     index_max = np.argmax(self.grid_posterior)
                     max_x, max_y = self.index_inverse(index_max)
                     if max_x != tran_x or max_y != tran_y:
                         error += 1
+                        transmitter.add_error()
                     total_test += 1
                     i += 1
 
@@ -227,9 +223,12 @@ class SelectSensor:
     def print(self):
         '''Print for testing
         '''
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
+                print(transmitter)
         #print('\ndata:\n')
         #print(self.grid.shape, '\n', self.grid)
-        print(self.covariance)
+        #print(self.covariance)
 
 
 def main():
@@ -241,6 +240,8 @@ def main():
     select_sensor.read_init_sensor('sensor.txt')
     select_sensor.read_mean_std('mean_std.txt')
     select_sensor.compute_multivariant_gaussian()
+    print('error ', select_sensor.test_error())
+    select_sensor.print()
 
     #select_sensor.read_init_sensor('sensor.txt')
     #select_sensor.mean_std_output()

@@ -15,6 +15,7 @@ class Transmitter:
         self.y = y
         self.mean_vec = []
         self.multivariant_gaussian = None
+        self.error = 0
 
 
     def write_mean_vec(self, filename):
@@ -24,10 +25,19 @@ class Transmitter:
             f.write(str(self.mean_vec) + '\n')
 
 
+    def add_error(self):
+        '''Error counter
+        '''
+        self.error += 1
+
+
     def __str__(self):
-        return "(%d, %d) " % (self.x, self.y)
+        str1 = "(%d, %d) ".ljust(10) % (self.x, self.y)
+        return str1 + str(self.error)
 
 
 if __name__ == '__main__':
     transmitter = Transmitter(3, 5)
+    transmitter2 = Transmitter(7, 9)
     print(transmitter)
+    print(transmitter2)
