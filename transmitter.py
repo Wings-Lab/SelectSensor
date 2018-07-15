@@ -4,9 +4,10 @@ Module for class Transmitter. A transmitter is essentially a hypothesis
 class Transmitter:
     '''Encapsulate a transmitter
     Attributes:
-        x (int): location - first dimension
-        y (int): location - second dimension
-        mean_vec (list): mean vector, length is the number of sensors
+        x (int): location -  first dimension
+        y (int): location -  second dimension
+        mean_vec (list):     mean vector, length is the number of sensors
+        mean_vec_sub (list): mean vector for subset of sensors
         multivariant_gaussian(scipy.stats.multivariate_normal):
                               each hypothesis corresponds to a multivariant guassian distribution
     '''
@@ -14,6 +15,7 @@ class Transmitter:
         self.x = x
         self.y = y
         self.mean_vec = []
+        self.mean_vec_sub = []
         self.multivariant_gaussian = None
         self.error = 0
 

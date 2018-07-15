@@ -24,10 +24,12 @@ class SelectSensor:
         grid_priori (np.ndarray):    the element is priori probability of hypothesis - transmitter
         grid_posterior (np.ndarray): the element is posterior probability of hypothesis - transmitter
         transmitters (list): a 2D list of Transmitter
-        sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitters
+        sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitter
         data (ndarray):      a 2D array of observation data
         covariance (list):   a 2D list of covariance. each data share a same covariance matrix
         mean_stds (dict):    assume sigal between a transmitter-sensor pair is normal distributed
+        subset (dict):       a subset of all sensors
+        subset_index (list): the linear index of sensor in self.sensors
     '''
     def __init__(self, filename):
         self.config = read_config(filename)
@@ -42,6 +44,8 @@ class SelectSensor:
         self.init_transmitters()
         self.set_priori()
         self.means_stds = {}
+        self.subset = {}
+        self.subset_index = []
 
 
     def set_priori(self):
@@ -170,6 +174,49 @@ class SelectSensor:
                     setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=mean_vector, cov=self.covariance))
 
 
+    def select_subset_random(self, fraction):
+        '''Select a subset of sensors randomly
+        Attributes:
+            fraction (float): a fraction of sensors are randomly selected
+        '''
+        self.subset = {}
+        size = int(len(self.sensors) * fraction)
+        sequence = [i for i in range(self.sen_num)]
+        self.subset_index = random.sample(sequence, size)
+        self.subset_index.sort()
+        sensor_list = list(self.sensors)
+        for index in self.subset_index:
+            self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
+        self.update_transmitters()
+
+
+    def select_subset_offline(self):
+        '''Select a subset of sensors greedily. offline version
+        '''
+
+
+    def select_subset_online(self):
+        '''Select a subset of sensors greedily. online version
+        '''
+
+
+    def update_transmitters(self):
+        '''Given a subset of sensors, update transmitter's multivariant gaussian
+        '''
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
+                transmitter.mean_vec_sub = []
+                for index in self.subset_index:
+                    transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
+                new_cov = []
+                for x in self.subset_index:
+                    row = []
+                    for y in self.subset_index:
+                        row.append(self.covariance[x][y])
+                    new_cov.append(row)
+                transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
+
+
     def test_error(self):
         '''Generate new data, calculate posterior probability, compute classification error.
            For each transmitter, test 10 times
@@ -178,14 +225,16 @@ class SelectSensor:
         error = 0
         self.grid_posterior = np.zeros((self.grid_len, self.grid_len))
         for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
+            for transmitter in transmitter_list:  # test a transmitter
+                transmitter.error = 0
                 tran_x, tran_y = transmitter.x, transmitter.y
-                if tran_x == tran_y:
+                if tran_x == tran_y and tran_x%5 == 0:
                     print(tran_x)
                 i = 0
                 while i < 10:  # test 10 times for each transmitter
                     data = []
-                    for sensor in self.sensors:
+                    #for sensor in self.sensors:
+                    for sensor in self.subset:
                         sen_x, sen_y = sensor[0], sensor[1]
                         mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                         data.append(round(np.random.normal(mean, std), 3))
@@ -235,13 +284,14 @@ def main():
     '''main
     '''
 
-    select_sensor = SelectSensor('config.json')
+    selectsensor = SelectSensor('config.json')
 
-    select_sensor.read_init_sensor('sensor.txt')
-    select_sensor.read_mean_std('mean_std.txt')
-    select_sensor.compute_multivariant_gaussian()
-    print('error ', select_sensor.test_error())
-    select_sensor.print()
+    selectsensor.read_init_sensor('sensor.txt')
+    selectsensor.read_mean_std('mean_std.txt')
+    selectsensor.compute_multivariant_gaussian()
+    selectsensor.select_subset_random(0.5)
+    #print('error ', selectssensor.test_error())
+    selectsensor.print()
 
     #select_sensor.read_init_sensor('sensor.txt')
     #select_sensor.mean_std_output()
