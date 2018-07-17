@@ -4,6 +4,8 @@ Select sensor and detect transmitter
 import random
 import math
 import traceback
+import copy
+import os
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
@@ -12,7 +14,6 @@ from scipy.stats import norm
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
-
 
 
 class SelectSensor:
@@ -80,16 +81,18 @@ class SelectSensor:
                 i += 1
 
 
-    def save_sensor(self):
+    def save_sensor(self, filename):
         '''Save location of sensors
         '''
-        with open('sensor.txt', 'w') as f:
+        with open(filename, 'w') as f:
             for key in self.sensors:
                 f.write(self.sensors[key].output())
 
 
     def read_init_sensor(self, filename):
         '''Read location of sensors and init the sensors
+        Attributes:
+            filename (str)
         '''
         self.sensors = {}
         with open(filename, 'r') as f:
@@ -100,10 +103,13 @@ class SelectSensor:
                 self.sensors[(x, y)] = Sensor(x, y, std)
 
 
-    def mean_std_output(self):
-        '''test mean std input output
+    def save_mean_std(self, filename):
+        '''Save the mean and std of each transmitter-sensor pair.
+           Mean is computed by f(x) = 100 - 30*math.log(2*dist)
+        Attributes:
+            filename (str)
         '''
-        with open('mean_std.txt', 'w') as f:
+        with open(filename, 'w') as f:
             for transmitter_list in self.transmitters:
                 for transmitter in transmitter_list:
                     tran_x, tran_y = transmitter.x, transmitter.y
@@ -111,12 +117,14 @@ class SelectSensor:
                         sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                         dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                         dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                        mean = 100 - 20*math.log(2*dist)
+                        mean = 100 - 26.6*math.log(2*dist)
                         f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
     def read_mean_std(self, filename):
         '''read mean std information between transmitters and sensors
+        Attributes:
+            filename (str)
         '''
         with open(filename, 'r') as f:
             lines = f.readlines()
@@ -128,17 +136,25 @@ class SelectSensor:
                 self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
 
 
-    def generate_data(self):
+    def generate_data(self, sample_file, mean_vec_file):
         '''Since we don't have the real data yet, we make up some artificial data according to mean_std.txt
            Then save them in a csv file. also save the mean vector
+        Attributes:
+            sample_file (str): filename for artificial sample
+            mean_vec_file (str): filename for mean vector, the mean vector computed from sampled data
         '''
+        try:
+            os.remove(mean_vec_file)
+        except Exception:
+            traceback.print_exc()
+
         total_data = []
         for transmitter_list in self.transmitters:
             for transmitter in transmitter_list:
                 tran_x, tran_y = transmitter.x, transmitter.y
                 data = []
                 i = 0
-                while i < 100:                   # sample 100 times for each transmitter
+                while i < 200:                   # sample 100 times for each transmitter
                     one_transmitter = []
                     for sensor in self.sensors:  # for each transmitter, send signal to all sensors
                         sen_x, sen_y = sensor[0], sensor[1]
@@ -150,21 +166,24 @@ class SelectSensor:
                 data = np.array(data)
                 mean_vec = data.mean(axis=0).tolist()
                 setattr(transmitter, 'mean_vec', mean_vec)
-                transmitter.write_mean_vec('mean_vector.txt')
+                transmitter.write_mean_vec(mean_vec_file)
 
         data_pd = pd.DataFrame(total_data)
-        data_pd.to_csv('artificial_samples.csv', index=False, header=False)
+        data_pd.to_csv(sample_file, index=False, header=False)
 
 
-    def compute_multivariant_gaussian(self):
+    def compute_multivariant_gaussian(self, sample_file, mean_vec_file):
         '''Read data and mean vectors, then compute the guassian function by using the data
            Each hypothesis corresponds to a single gaussian function
            with different mean but the same covariance.
+        Attributes:
+            sample_file (str)
+            mean_vec_file (str)
         '''
-        data = pd.read_csv('artificial_samples.csv', header=None)
+        data = pd.read_csv(sample_file, header=None)
         self.covariance = np.cov(data.as_matrix().T)
         print('Computed covariance!')
-        with open('mean_vector.txt', 'r') as f:
+        with open(mean_vec_file, 'r') as f:
             for transmitter_list in self.transmitters:
                 for transmitter in transmitter_list:
                     line = f.readline()
@@ -173,6 +192,12 @@ class SelectSensor:
                     mean_vector = [float(i) for i in line]
                     setattr(transmitter, 'mean_vec', mean_vector)
                     setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=mean_vector, cov=self.covariance))
+
+
+    def no_selection(self):
+        '''The subset is all the sensors
+        '''
+        self.subset = copy.deepcopy(self.sensors)
 
 
     def select_offline_random(self, fraction):
@@ -325,7 +350,7 @@ class SelectSensor:
             for transmitter in transmitter_list:  # test a transmitter
                 transmitter.error = 0
                 tran_x, tran_y = transmitter.x, transmitter.y
-                if tran_x == tran_y and tran_x%5 == 0:
+                if tran_x == tran_y:
                     print(tran_x)
                 i = 0
                 while i < 10:  # test 10 times for each transmitter
@@ -334,7 +359,7 @@ class SelectSensor:
                     for sensor in self.subset:
                         sen_x, sen_y = sensor[0], sensor[1]
                         mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                        data.append(round(np.random.normal(mean, std), 3))
+                        data.append(round(np.random.normal(mean, std), 4))
                     for transmitter_list2 in self.transmitters:
                         for transmitter2 in transmitter_list2:  # given hypothesis, the probability of data
                             multivariant_gaussian = transmitter2.multivariant_gaussian # see which hypothesis is "best"
@@ -377,31 +402,42 @@ class SelectSensor:
         #print(self.covariance)
 
 
+def new_data():
+    '''Change config.json file, i.e. grid len and sensor numbre, then generate new data.
+    '''
+    selectsensor = SelectSensor('config.json')
+
+    selectsensor.init_random_sensors()
+    selectsensor.save_sensor('data/sensor.txt')
+
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.save_mean_std('data/mean_std.txt')
+
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.generate_data('data/artificial_samples.csv', 'data/mean_vector.txt')
+
+
 def main():
     '''main
     '''
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.read_init_sensor('sensor.txt')
-    selectsensor.read_mean_std('mean_std.txt')
-    selectsensor.compute_multivariant_gaussian()
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv', 'data/mean_vector.txt')
+    selectsensor.no_selection()
+    print('error ', selectsensor.test_error())
+
+    #selectsensor.select_offline_greedy(15)
+
     #selectsensor.select_offline_random(0.5)
-    selectsensor.select_offline_farthest(0.5)
-    #print('error ', selectssensor.test_error())
-    selectsensor.print()
-
-    #select_sensor.read_init_sensor('sensor.txt')
-    #select_sensor.mean_std_output()
-
-    #select_sensor.read_init_sensor('sensor.txt')
-    #select_sensor.read_mean_std('mean_std.txt')
-    #select_sensor.generate_data()
-
-    #select_sensor.init_random_sensors()
-    #select_sensor.save_sensor()
-    #select_sensor.print()
+    #selectsensor.select_offline_farthest(0.5)
+    #print('error ', selectsensor.test_error())
+    #selectsensor.print()
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+    new_data()
