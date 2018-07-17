@@ -3,11 +3,12 @@ Select sensor and detect transmitter
 '''
 import random
 import math
-#import traceback
+import traceback
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
+from scipy.stats import norm
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
@@ -174,25 +175,121 @@ class SelectSensor:
                     setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=mean_vector, cov=self.covariance))
 
 
-    def select_subset_random(self, fraction):
+    def select_offline_random(self, fraction):
         '''Select a subset of sensors randomly
         Attributes:
             fraction (float): a fraction of sensors are randomly selected
         '''
         self.subset = {}
-        size = int(len(self.sensors) * fraction)
+        size = int(self.sen_num * fraction)
         sequence = [i for i in range(self.sen_num)]
         self.subset_index = random.sample(sequence, size)
         self.subset_index.sort()
-        sensor_list = list(self.sensors)
+        sensor_list = list(self.sensors)           # list of sensors' key
         for index in self.subset_index:
             self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
         self.update_transmitters()
 
 
-    def select_subset_offline(self):
-        '''Select a subset of sensors greedily. offline version
+    def select_offline_farthest(self, fraction):
+        '''select sensors based on largest distance sum
         '''
+        self.subset = {}
+        sensor_list = list(self.sensors)           # list of sensors' key
+        size = int(self.sen_num * fraction)
+        start = random.randint(0, self.sen_num-1)  # the first sensor is randomly selected
+        i = 0
+        for key in self.sensors:
+            if i == start:
+                self.subset[key] = self.sensors[key]
+                sensor_list.remove(key)
+            i += 1
+        while len(self.subset) < size:
+            max_dist_sum = 0
+            max_key = (0, 0)
+            for key_candidate in sensor_list:
+                dist_sum = 0
+                for key_selected in self.subset:
+                    dist_sum += distance.euclidean([key_candidate[0], key_candidate[1]], [key_selected[0], key_selected[1]])
+                if dist_sum > max_dist_sum:
+                    max_key = key_candidate
+                    max_dist_sum = dist_sum
+            self.subset[max_key] = self.sensors.get(max_key)
+            sensor_list.remove(max_key)
+
+
+    def O_T(self, subset_index):
+        '''O_T = 1 - Pe,T
+           Given a subset of sensors T, compute the expected error Pe,T
+        Attributes:
+            subset_index (list): a subset of sensors T
+        Return 1 - Pe,T
+        '''
+        prob_error = 0
+        cov_sub = self.covariance_sub(subset_index)
+        for transmitter_list in self.transmitters:
+            for transmitter_i in transmitter_list:
+                i_x, i_y = transmitter_i.x, transmitter_i.yet
+                transmitter_i.set_mean_vec_sub(subset_index)
+                prob_i_error = 0
+                for transmitter_list2 in self.transmitters:
+                    for transmitter_j in transmitter_list2:
+                        j_x, j_y = transmitter_j.x, transmitter_j.y
+                        if i_x == j_x and i_y == j_y:
+                            continue
+                        transmitter_j.set_mean_vec_sub(subset_index)
+                        pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                        prob_i_error += norm.sf(math.sqrt(np.dot(np.dot(pj_pi, cov_sub), pj_pi)))
+                prob_error += prob_i_error * self.grid_priori[i_x][i_y]
+        return prob_error
+
+
+    def covariance_sub(self, subset_index):
+        '''Given a list of index of sensors, return the sub covariance matrix
+        Attributes:
+            subset_index (index): list of index of sensors. should be sorted.
+        Return:
+            (list): a 2D sub covariance matrix
+        '''
+        sub_cov = []
+        for x in subset_index:
+            row = []
+            for y in subset_index:
+                row.append(self.covariance[x][y])
+            sub_cov.append(row)
+        return sub_cov
+
+
+    def select_offline_greedy(self, budget):
+        '''Select a subset of sensors greedily. offline + homo version
+        Attributes:
+            budget (int): budget constraint
+        Return:
+            (list): a list of sensor index
+        '''
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+        while cost < budget:
+            maximum = self.O_T(subset_index)                # L in the paper
+            best_candidate = None
+            try:
+                best_candidate = complement_index[0]
+            except IndexError:
+                traceback.print_exc()
+                return subset_index
+            for candidate in complement_index:
+                subset_index.append(candidate)
+                temp = self.O_T(subset_index)
+                if temp > maximum:
+                    maximum = temp
+                    best_candidate = candidate
+                subset_index.pop(len(subset_index)-1)
+            subset_index.append(best_candidate)
+            complement_index.remove(best_candidate)
+            cost += self.sensors.get(sensor_list[best_candidate].cost)
+        return subset_index
 
 
     def select_subset_online(self):
@@ -201,7 +298,7 @@ class SelectSensor:
 
 
     def update_transmitters(self):
-        '''Given a subset of sensors, update transmitter's multivariant gaussian
+        '''Given a subset of sensors, update transmitter's multivariate gaussian
         '''
         for transmitter_list in self.transmitters:
             for transmitter in transmitter_list:
@@ -289,7 +386,8 @@ def main():
     selectsensor.read_init_sensor('sensor.txt')
     selectsensor.read_mean_std('mean_std.txt')
     selectsensor.compute_multivariant_gaussian()
-    selectsensor.select_subset_random(0.5)
+    #selectsensor.select_offline_random(0.5)
+    selectsensor.select_offline_farthest(0.5)
     #print('error ', selectssensor.test_error())
     selectsensor.print()
 

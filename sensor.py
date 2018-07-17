@@ -7,11 +7,13 @@ class Sensor:
         x (int):    location - first dimension
         y (int):    location - second dimension
         std(float): each sensor has a standard deviation for receiving signals
+        cost (int): each sensor has a engery cost, defualt value is 1
     '''
-    def __init__(self, x, y, std):
+    def __init__(self, x, y, std, cost=1):
         self.x = x
         self.y = y
         self.std = std
+        self.cost = cost
 
 
     def __str__(self):

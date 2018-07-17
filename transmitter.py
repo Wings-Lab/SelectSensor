@@ -20,6 +20,16 @@ class Transmitter:
         self.error = 0
 
 
+    def set_mean_vec_sub(self, subset_index):
+        '''Given a subset_index list, set the mean_vec_sub
+        Attributes:
+            subset_index (list): a list of index
+        '''
+        self.mean_vec_sub = []
+        for index in subset_index:
+            self.mean_vec_sub.append(self.mean_vec[index])
+
+
     def write_mean_vec(self, filename):
         '''append the mean vector to filename
         '''
