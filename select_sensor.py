@@ -69,6 +69,7 @@ class SelectSensor:
     def init_random_sensors(self):
         '''Initiate some sensors randomly
         '''
+        noise_l, noise_h = float(self.config["noise_low"]), float(self.config["noise_high"])
         i = 0
         while i < self.sen_num:
             x = random.randint(0, self.grid_len-1) # randomly find a place for a sensor
@@ -76,7 +77,7 @@ class SelectSensor:
             if self.sensors.get((x, y)): # a sensor exists at (x, y)
                 continue
             else:                        # no sensor exists at (x,y)
-                self.sensors[(x, y)] = Sensor(x, y, random.uniform(0.5, 1))  # the noise is here
+                self.sensors[(x, y)] = Sensor(x, y, random.uniform(noise_l, noise_h))  # the noise is here
                 i += 1
 
 
@@ -272,6 +273,41 @@ class SelectSensor:
         return sub_cov
 
 
+    def o_t(self, subset_index):
+        '''Given a subset of sensors T, compute the O_T
+        Attributes:
+            subset_index (list): a subset of sensors T, guarantee sorted
+        Return O_T
+        '''
+        if not subset_index:  # empty sequence are false
+            return 0
+        prob_error = []
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+
+        for transmitter_list in self.transmitters:
+            for transmitter_i in transmitter_list:
+                i_x, i_y = transmitter_i.x, transmitter_i.y
+                transmitter_i.set_mean_vec_sub(subset_index)
+                prob_i = []
+                for transmitter_list2 in self.transmitters:
+                    for transmitter_j in transmitter_list2:
+                        j_x, j_y = transmitter_j.x, transmitter_j.y
+                        if i_x == j_x and i_y == j_y:
+                            continue
+                        transmitter_j.set_mean_vec_sub(subset_index)
+                        pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                        prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+                product = 1
+                for i in prob_i:
+                    product *= i
+                prob_error.append(product * self.grid_priori[i_x][i_y])
+        o_t = 0
+        for i in prob_error:
+            o_t += i
+        return o_t
+
+
     def O_T(self, subset_index):
         '''O_T = 1 - Pe,T
            Given a subset of sensors T, compute the expected error Pe,T
@@ -325,11 +361,11 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
 
         while cost < budget and complement_index:
-            maximum = self.O_T(subset_index)                # L in the paper
+            maximum = self.o_t(subset_index)                # L in the paper
             best_candidate = complement_index[0]            # init the best candidate as the first one
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)     # guarantee subset_index always be sorted here
-                temp = self.O_T(subset_index)
+                temp = self.o_t(subset_index)
                 print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
@@ -438,18 +474,18 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    #selectsensor.no_selection()
+    selectsensor.no_selection()
 
-    subset_list = selectsensor.select_offline_greedy(2)
+    subset_list = selectsensor.select_offline_greedy(5)
     print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_random(0.5)
     #selectsensor.select_offline_farthest(0.5)
 
-    #print('error ', selectsensor.test_error())
+    print('error ', selectsensor.test_error())
     #selectsensor.print()
 
 
 if __name__ == '__main__':
+    new_data()
     main()
-    #new_data()
