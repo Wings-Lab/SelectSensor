@@ -454,12 +454,11 @@ def main():
     #selectsensor.no_selection()
 
     subset_list = selectsensor.select_offline_greedy(1)
-    selectsensor.update_subset(subset_list)
-
+    print('The selected subset is: ', subset_list)
     #selectsensor.select_offline_random(0.5)
     #selectsensor.select_offline_farthest(0.5)
 
-    print('error ', selectsensor.test_error())
+    #print('error ', selectsensor.test_error())
     #selectsensor.print()
 
 
