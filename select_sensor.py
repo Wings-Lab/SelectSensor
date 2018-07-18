@@ -77,7 +77,7 @@ class SelectSensor:
             if self.sensors.get((x, y)): # a sensor exists at (x, y)
                 continue
             else:                        # no sensor exists at (x,y)
-                self.sensors[(x, y)] = Sensor(x, y, random.uniform(1, 2))
+                self.sensors[(x, y)] = Sensor(x, y, random.uniform(0.5, 1))  # the noise is here
                 i += 1
 
 
@@ -200,6 +200,34 @@ class SelectSensor:
         self.subset = copy.deepcopy(self.sensors)
 
 
+    def update_subset(self, subset_index):
+        '''Given a list of sensor indexes, which represents a subset of sensors, update self.subset
+        Attributes:
+            subset_index (list): a list not sorted, a list of sensor indexes
+        '''
+        self.subset_index = subset_index.sort()
+        sensor_list = list(self.sensors)           # list of sensors' key
+        for index in self.subset_index:
+            self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
+
+
+    def update_transmitters(self):
+        '''Given a subset of sensors, update transmitter's multivariate gaussian
+        '''
+        for transmitter_list in self.transmitters:
+            for transmitter in transmitter_list:
+                transmitter.mean_vec_sub = []
+                for index in self.subset_index:
+                    transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
+                new_cov = []
+                for x in self.subset_index:
+                    row = []
+                    for y in self.subset_index:
+                        row.append(self.covariance[x][y])
+                    new_cov.append(row)
+                transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
+
+
     def select_offline_random(self, fraction):
         '''Select a subset of sensors randomly
         Attributes:
@@ -208,12 +236,11 @@ class SelectSensor:
         self.subset = {}
         size = int(self.sen_num * fraction)
         sequence = [i for i in range(self.sen_num)]
-        self.subset_index = random.sample(sequence, size)
-        self.subset_index.sort()
-        sensor_list = list(self.sensors)           # list of sensors' key
-        for index in self.subset_index:
-            self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
+        subset_index = random.sample(sequence, size)
+
+        self.update_subset(subset_index)
         self.update_transmitters()
+
 
 
     def select_offline_farthest(self, fraction):
@@ -250,11 +277,15 @@ class SelectSensor:
             subset_index (list): a subset of sensors T
         Return 1 - Pe,T
         '''
-        prob_error = 0
-        cov_sub = self.covariance_sub(subset_index)
+        if not subset_index:  # empty sequence are false
+            return 0
+        prob_error = []
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+
         for transmitter_list in self.transmitters:
             for transmitter_i in transmitter_list:
-                i_x, i_y = transmitter_i.x, transmitter_i.yet
+                i_x, i_y = transmitter_i.x, transmitter_i.y
                 transmitter_i.set_mean_vec_sub(subset_index)
                 prob_i_error = 0
                 for transmitter_list2 in self.transmitters:
@@ -264,9 +295,19 @@ class SelectSensor:
                             continue
                         transmitter_j.set_mean_vec_sub(subset_index)
                         pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
-                        prob_i_error += norm.sf(math.sqrt(np.dot(np.dot(pj_pi, cov_sub), pj_pi)))
-                prob_error += prob_i_error * self.grid_priori[i_x][i_y]
-        return prob_error
+                        prob_i_error += norm.sf(math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+                prob_error.append(prob_i_error * self.grid_priori[i_x][i_y])
+
+        union = 0
+        for prob in prob_error:
+            union += prob
+        size = len(prob_error)
+        for i in range(size):
+            for j in range(size):
+                if i != j:
+                    union -= prob_error[i]*prob_error[j]
+
+        return 1 - union
 
 
     def covariance_sub(self, subset_index):
@@ -296,48 +337,31 @@ class SelectSensor:
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-        while cost < budget:
+
+        while cost < budget and complement_index:
             maximum = self.O_T(subset_index)                # L in the paper
-            best_candidate = None
-            try:
-                best_candidate = complement_index[0]
-            except IndexError:
-                traceback.print_exc()
-                return subset_index
+            best_candidate = complement_index[0]
             for candidate in complement_index:
                 subset_index.append(candidate)
-                temp = self.O_T(subset_index)
+                temp = self.O_T(subset_index.sort())
+                print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
                     best_candidate = candidate
                 subset_index.pop(len(subset_index)-1)
             subset_index.append(best_candidate)
             complement_index.remove(best_candidate)
-            cost += self.sensors.get(sensor_list[best_candidate].cost)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+
+        self.update_subset(subset_index)
+        self.update_transmitters()
+
         return subset_index
 
 
     def select_subset_online(self):
         '''Select a subset of sensors greedily. online version
         '''
-
-
-    def update_transmitters(self):
-        '''Given a subset of sensors, update transmitter's multivariate gaussian
-        '''
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
-                transmitter.mean_vec_sub = []
-                for index in self.subset_index:
-                    transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
-                new_cov = []
-                for x in self.subset_index:
-                    row = []
-                    for y in self.subset_index:
-                        row.append(self.covariance[x][y])
-                    new_cov.append(row)
-                transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
-
 
     def test_error(self):
         '''Generate new data, calculate posterior probability, compute classification error.
@@ -427,17 +451,18 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv', 'data/mean_vector.txt')
-    selectsensor.no_selection()
-    print('error ', selectsensor.test_error())
+    #selectsensor.no_selection()
 
-    #selectsensor.select_offline_greedy(15)
+    subset_list = selectsensor.select_offline_greedy(10)
+    selectsensor.update_subset(subset_list)
 
     #selectsensor.select_offline_random(0.5)
     #selectsensor.select_offline_farthest(0.5)
-    #print('error ', selectsensor.test_error())
+
+    print('error ', selectsensor.test_error())
     #selectsensor.print()
 
 
 if __name__ == '__main__':
-    #main()
-    new_data()
+    main()
+    #new_data()
