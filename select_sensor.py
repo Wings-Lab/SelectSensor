@@ -447,5 +447,5 @@ def main():
 
 
 if __name__ == '__main__':
-    #new_data()
-    main()
+    new_data()
+    #main()
