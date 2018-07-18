@@ -14,6 +14,7 @@ from scipy.stats import norm
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
+from utility import ordered_insert
 
 
 class SelectSensor:
@@ -203,9 +204,9 @@ class SelectSensor:
     def update_subset(self, subset_index):
         '''Given a list of sensor indexes, which represents a subset of sensors, update self.subset
         Attributes:
-            subset_index (list): a list not sorted, a list of sensor indexes
+            subset_index (list): a list of sensor indexes. guarantee sorted
         '''
-        self.subset_index = subset_index.sort()
+        self.subset_index = subset_index
         sensor_list = list(self.sensors)           # list of sensors' key
         for index in self.subset_index:
             self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
@@ -242,7 +243,6 @@ class SelectSensor:
         self.update_transmitters()
 
 
-
     def select_offline_farthest(self, fraction):
         '''select sensors based on largest distance sum
         '''
@@ -270,11 +270,27 @@ class SelectSensor:
             sensor_list.remove(max_key)
 
 
+    def covariance_sub(self, subset_index):
+        '''Given a list of index of sensors, return the sub covariance matrix
+        Attributes:
+            subset_index (index): list of index of sensors. should be sorted.
+        Return:
+            (list): a 2D sub covariance matrix
+        '''
+        sub_cov = []
+        for x in subset_index:
+            row = []
+            for y in subset_index:
+                row.append(self.covariance[x][y])
+            sub_cov.append(row)
+        return sub_cov
+
+
     def O_T(self, subset_index):
         '''O_T = 1 - Pe,T
            Given a subset of sensors T, compute the expected error Pe,T
         Attributes:
-            subset_index (list): a subset of sensors T
+            subset_index (list): a subset of sensors T, guarantee sorted
         Return 1 - Pe,T
         '''
         if not subset_index:  # empty sequence are false
@@ -310,22 +326,6 @@ class SelectSensor:
         return 1 - union
 
 
-    def covariance_sub(self, subset_index):
-        '''Given a list of index of sensors, return the sub covariance matrix
-        Attributes:
-            subset_index (index): list of index of sensors. should be sorted.
-        Return:
-            (list): a 2D sub covariance matrix
-        '''
-        sub_cov = []
-        for x in subset_index:
-            row = []
-            for y in subset_index:
-                row.append(self.covariance[x][y])
-            sub_cov.append(row)
-        return sub_cov
-
-
     def select_offline_greedy(self, budget):
         '''Select a subset of sensors greedily. offline + homo version
         Attributes:
@@ -340,16 +340,16 @@ class SelectSensor:
 
         while cost < budget and complement_index:
             maximum = self.O_T(subset_index)                # L in the paper
-            best_candidate = complement_index[0]
+            best_candidate = complement_index[0]            # init the best candidate as the first one
             for candidate in complement_index:
-                subset_index.append(candidate)
-                temp = self.O_T(subset_index.sort())
+                ordered_insert(subset_index, candidate)     # guarantee subset_index always be sorted here
+                temp = self.O_T(subset_index)
                 print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
                     best_candidate = candidate
-                subset_index.pop(len(subset_index)-1)
-            subset_index.append(best_candidate)
+                subset_index.remove(candidate)
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
 
@@ -453,7 +453,7 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv', 'data/mean_vector.txt')
     #selectsensor.no_selection()
 
-    subset_list = selectsensor.select_offline_greedy(10)
+    subset_list = selectsensor.select_offline_greedy(1)
     selectsensor.update_subset(subset_list)
 
     #selectsensor.select_offline_random(0.5)
