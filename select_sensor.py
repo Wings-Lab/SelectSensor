@@ -117,7 +117,7 @@ class SelectSensor:
                         sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                         dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                         dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                        mean = 100 - 26.6*math.log(2*dist)
+                        mean = 100 - 24.5*math.log(2*dist)
                         f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
@@ -308,46 +308,6 @@ class SelectSensor:
         return o_t
 
 
-    def O_T(self, subset_index):
-        '''O_T = 1 - Pe,T
-           Given a subset of sensors T, compute the expected error Pe,T
-        Attributes:
-            subset_index (list): a subset of sensors T, guarantee sorted
-        Return 1 - Pe,T
-        '''
-        if not subset_index:  # empty sequence are false
-            return 0
-        prob_error = []
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
-
-        for transmitter_list in self.transmitters:
-            for transmitter_i in transmitter_list:
-                i_x, i_y = transmitter_i.x, transmitter_i.y
-                transmitter_i.set_mean_vec_sub(subset_index)
-                prob_i_error = 0
-                for transmitter_list2 in self.transmitters:
-                    for transmitter_j in transmitter_list2:
-                        j_x, j_y = transmitter_j.x, transmitter_j.y
-                        if i_x == j_x and i_y == j_y:
-                            continue
-                        transmitter_j.set_mean_vec_sub(subset_index)
-                        pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
-                        prob_i_error += norm.sf(math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
-                prob_error.append(prob_i_error * self.grid_priori[i_x][i_y])
-
-        union = 0
-        for prob in prob_error:
-            union += prob
-        size = len(prob_error)
-        for i in range(size):
-            for j in range(size):
-                if i != j:
-                    union -= prob_error[i]*prob_error[j]
-
-        return 1 - union
-
-
     def select_offline_greedy(self, budget):
         '''Select a subset of sensors greedily. offline + homo version
         Attributes:
@@ -476,16 +436,16 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     selectsensor.no_selection()
 
-    subset_list = selectsensor.select_offline_greedy(5)
+    subset_list = selectsensor.select_offline_greedy(10)
     print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_random(0.5)
     #selectsensor.select_offline_farthest(0.5)
 
-    print('error ', selectsensor.test_error())
+    #print('error ', selectsensor.test_error())
     #selectsensor.print()
 
 
 if __name__ == '__main__':
-    new_data()
+    #new_data()
     main()

@@ -4,3 +4,4 @@ __pycache__
 .vscode
 artificial_samples.csv
 higherror.txt
+mean_std.txt

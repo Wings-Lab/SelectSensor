@@ -1,6 +1,6 @@
 {
-    "grid_length":"10",
-    "sensor_number":"5",
+    "grid_length":"15",
+    "sensor_number":"20",
     "noise_low":"1",
     "noise_high":"2"
 }
