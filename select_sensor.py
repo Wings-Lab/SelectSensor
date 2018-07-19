@@ -9,6 +9,7 @@ import pandas as pd
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
 from scipy.stats import norm
+from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
@@ -24,7 +25,7 @@ class SelectSensor:
         grid_len (int):      the length of the grid
         grid_priori (np.ndarray):    the element is priori probability of hypothesis - transmitter
         grid_posterior (np.ndarray): the element is posterior probability of hypothesis - transmitter
-        transmitters (list): a 2D list of Transmitter
+        transmitters (list): a list of Transmitter
         sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitter
         data (ndarray):      a 2D array of observation data
         covariance (list):   a 2D list of covariance. each data share a same covariance matrix
@@ -60,10 +61,8 @@ class SelectSensor:
         '''Initiate a transmitter at all locations
         '''
         for i in range(self.grid_len):
-            temp_transmitters = []
             for j in range(self.grid_len):
-                temp_transmitters.append(Transmitter(i, j))
-            self.transmitters.append(temp_transmitters)
+                self.transmitters.append(Transmitter(i, j))
 
 
     def init_random_sensors(self):
@@ -110,15 +109,14 @@ class SelectSensor:
             filename (str)
         '''
         with open(filename, 'w') as f:
-            for transmitter_list in self.transmitters:
-                for transmitter in transmitter_list:
-                    tran_x, tran_y = transmitter.x, transmitter.y
-                    for key in self.sensors:
-                        sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
-                        dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
-                        dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                        mean = 100 - 24.5*math.log(2*dist)
-                        f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
+            for transmitter in self.transmitters:
+                tran_x, tran_y = transmitter.x, transmitter.y
+                for key in self.sensors:
+                    sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
+                    dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
+                    dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
+                    mean = 100 - 24.5*math.log(2*dist)
+                    f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
     def read_mean_std(self, filename):
@@ -143,7 +141,7 @@ class SelectSensor:
             sample_file (str): filename for artificial sample
             mean_vec_file (str): filename for mean vector, the mean vector computed from sampled data
         '''
-        transmitter = self.transmitters[0][0]
+        transmitter = self.transmitters[0]
         tran_x, tran_y = transmitter.x, transmitter.y
         data = []
         i = 0
@@ -171,16 +169,14 @@ class SelectSensor:
         self.covariance = np.cov(data.as_matrix().T)  # compute covariance matrix by date from one transmitter
         print('Computed covariance!')                 # assume all transmitters share the same covariance
 
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
-                tran_x, tran_y = transmitter.x, transmitter.y
-                transmitter.mean_vec = []
-                for sensor in self.sensors:
-                    sen_x, sen_y = sensor[0], sensor[1]
-                    mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                    transmitter.mean_vec.append(mean_std[0])
-                setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
-
+        for transmitter in self.transmitters:
+            tran_x, tran_y = transmitter.x, transmitter.y
+            transmitter.mean_vec = []
+            for sensor in self.sensors:
+                sen_x, sen_y = sensor[0], sensor[1]
+                mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                transmitter.mean_vec.append(mean_std[0])
+            setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
 
     def no_selection(self):
         '''The subset is all the sensors
@@ -202,18 +198,17 @@ class SelectSensor:
     def update_transmitters(self):
         '''Given a subset of sensors, update transmitter's multivariate gaussian
         '''
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
-                transmitter.mean_vec_sub = []
-                for index in self.subset_index:
-                    transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
-                new_cov = []
-                for x in self.subset_index:
-                    row = []
-                    for y in self.subset_index:
-                        row.append(self.covariance[x][y])
-                    new_cov.append(row)
-                transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
+        for transmitter in self.transmitters:
+            transmitter.mean_vec_sub = []
+            for index in self.subset_index:
+                transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
+            new_cov = []
+            for x in self.subset_index:
+                row = []
+                for y in self.subset_index:
+                    row.append(self.covariance[x][y])
+                new_cov.append(row)
+            transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
 
     def select_offline_random(self, fraction):
@@ -273,6 +268,43 @@ class SelectSensor:
         return sub_cov
 
 
+    def o_t_p(self, subset_index):
+        '''(Parallelized version of o_t function) Given a subset of sensors T, compute the O_T
+        Attributes:
+            subset_index (list): a subset of sensors T, guarantee sorted
+        Return O_T
+        '''
+        if not subset_index:  # empty sequence are false
+            return 0
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+
+        prob = Parallel(n_jobs=-1)(delayed(self.inner_o_t)(subset_index, sub_cov_inv, transmitter_i) for transmitter_i in self.transmitters)
+        o_t = 0
+        for i in prob:
+            o_t += i
+        return o_t
+
+
+    def inner_o_t(self, subset_index, sub_cov_inv, transmitter_i):
+        '''The inner loop for o_t function (for parallelization)
+        '''
+        i_x, i_y = transmitter_i.x, transmitter_i.y
+        transmitter_i.set_mean_vec_sub(subset_index)
+        prob_i = []
+        for transmitter_j in self.transmitters:
+            j_x, j_y = transmitter_j.x, transmitter_j.y
+            if i_x == j_x and i_y == j_y:
+                continue
+            transmitter_j.set_mean_vec_sub(subset_index)
+            pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+            prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+        product = 1
+        for i in prob_i:
+            product *= i
+        return product*self.grid_priori[i_x][i_y]
+
+
     def o_t(self, subset_index):
         '''Given a subset of sensors T, compute the O_T
         Attributes:
@@ -285,23 +317,21 @@ class SelectSensor:
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
 
-        for transmitter_list in self.transmitters:
-            for transmitter_i in transmitter_list:
-                i_x, i_y = transmitter_i.x, transmitter_i.y
-                transmitter_i.set_mean_vec_sub(subset_index)
-                prob_i = []
-                for transmitter_list2 in self.transmitters:
-                    for transmitter_j in transmitter_list2:
-                        j_x, j_y = transmitter_j.x, transmitter_j.y
-                        if i_x == j_x and i_y == j_y:
-                            continue
-                        transmitter_j.set_mean_vec_sub(subset_index)
-                        pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
-                        prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
-                product = 1
-                for i in prob_i:
-                    product *= i
-                prob_error.append(product * self.grid_priori[i_x][i_y])
+        for transmitter_i in self.transmitters:
+            i_x, i_y = transmitter_i.x, transmitter_i.y
+            transmitter_i.set_mean_vec_sub(subset_index)
+            prob_i = []
+            for transmitter_j in self.transmitters:
+                j_x, j_y = transmitter_j.x, transmitter_j.y
+                if i_x == j_x and i_y == j_y:
+                    continue
+                transmitter_j.set_mean_vec_sub(subset_index)
+                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+            product = 1
+            for i in prob_i:
+                product *= i
+            prob_error.append(product * self.grid_priori[i_x][i_y])
         o_t = 0
         for i in prob_error:
             o_t += i
@@ -321,11 +351,11 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
 
         while cost < budget and complement_index:
-            maximum = self.o_t(subset_index)                # L in the paper
+            maximum = self.o_t_p(subset_index)                # L in the paper
             best_candidate = complement_index[0]            # init the best candidate as the first one
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)     # guarantee subset_index always be sorted here
-                temp = self.o_t(subset_index)
+                temp = self.o_t_p(subset_index)
                 print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
@@ -352,40 +382,34 @@ class SelectSensor:
         total_test = 0
         error = 0
         self.grid_posterior = np.zeros((self.grid_len, self.grid_len))
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:  # test a transmitter
-                transmitter.error = 0
-                tran_x, tran_y = transmitter.x, transmitter.y
-                if tran_x == tran_y:
-                    print(tran_x)
-                i = 0
-                while i < 10:  # test 10 times for each transmitter
-                    data = []
-                    #for sensor in self.sensors:
-                    for sensor in self.subset:
-                        sen_x, sen_y = sensor[0], sensor[1]
-                        mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                        data.append(np.random.normal(mean, std))
-                    for transmitter_list2 in self.transmitters:
-                        for transmitter2 in transmitter_list2:  # given hypothesis, the probability of data
-                            multivariant_gaussian = transmitter2.multivariant_gaussian # see which hypothesis is "best"
-                            tran_x2, tran_y2 = transmitter2.x, transmitter2.y
-                            likelihood = multivariant_gaussian.pdf(data)
-                            self.grid_posterior[tran_x2][tran_y2] = likelihood * self.grid_priori[tran_x2][tran_y2]
-
-                    denominator = self.grid_posterior.sum()   # we could neglect denominator
-                    if denominator <= 0:
-                        continue
-
-                    self.grid_posterior = self.grid_posterior/denominator
-
-                    index_max = np.argmax(self.grid_posterior)
-                    max_x, max_y = self.index_inverse(index_max)
-                    if max_x != tran_x or max_y != tran_y:
-                        error += 1
-                        transmitter.add_error()
-                    total_test += 1
-                    i += 1
+        for transmitter in self.transmitters:   # test a transmitter
+            transmitter.error = 0
+            tran_x, tran_y = transmitter.x, transmitter.y
+            if tran_x == tran_y:
+                print(tran_x)
+            i = 0
+            while i < 10:  # test 10 times for each transmitter
+                data = []
+                for sensor in self.subset:
+                    sen_x, sen_y = sensor[0], sensor[1]
+                    mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                    data.append(np.random.normal(mean, std))
+                for transmitter2 in self.transmitters:  # given hypothesis, the probability of data
+                    multivariant_gaussian = transmitter2.multivariant_gaussian # see which hypothesis is "best"
+                    tran_x2, tran_y2 = transmitter2.x, transmitter2.y
+                    likelihood = multivariant_gaussian.pdf(data)
+                    self.grid_posterior[tran_x2][tran_y2] = likelihood * self.grid_priori[tran_x2][tran_y2]
+                denominator = self.grid_posterior.sum()   # we could neglect denominator
+                if denominator <= 0:
+                    continue
+                self.grid_posterior = self.grid_posterior/denominator
+                index_max = np.argmax(self.grid_posterior)
+                max_x, max_y = self.index_inverse(index_max)
+                if max_x != tran_x or max_y != tran_y:
+                    error += 1
+                    transmitter.add_error()
+                total_test += 1
+                i += 1
 
         return float(error)/total_test
 
@@ -401,9 +425,8 @@ class SelectSensor:
     def print(self):
         '''Print for testing
         '''
-        for transmitter_list in self.transmitters:
-            for transmitter in transmitter_list:
-                print(transmitter)
+        for transmitter in self.transmitters:
+            print(transmitter)
         #print('\ndata:\n')
         #print(self.grid.shape, '\n', self.grid)
         #print(self.covariance)
