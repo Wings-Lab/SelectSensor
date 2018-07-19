@@ -434,7 +434,7 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    selectsensor.no_selection()
+    #selectsensor.no_selection()
 
     subset_list = selectsensor.select_offline_greedy(10)
     print('The selected subset is: ', subset_list)
