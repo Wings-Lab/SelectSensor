@@ -4,6 +4,7 @@ Select sensor and detect transmitter
 import random
 import math
 import copy
+import multiprocessing
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
@@ -278,8 +279,8 @@ class SelectSensor:
             return 0
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
-
-        prob = Parallel(n_jobs=-1)(delayed(self.inner_o_t)(subset_index, sub_cov_inv, transmitter_i) for transmitter_i in self.transmitters)
+        cores = multiprocessing.cpu_count()
+        prob = Parallel(n_jobs=cores)(delayed(self.inner_o_t)(subset_index, sub_cov_inv, transmitter_i) for transmitter_i in self.transmitters)
         o_t = 0
         for i in prob:
             o_t += i
