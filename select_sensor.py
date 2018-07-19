@@ -4,7 +4,6 @@ Select sensor and detect transmitter
 import random
 import math
 import copy
-import multiprocessing
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
@@ -269,17 +268,17 @@ class SelectSensor:
         return sub_cov
 
 
-    def o_t_p(self, subset_index):
+    def o_t_p(self, subset_index, cores):
         '''(Parallelized version of o_t function) Given a subset of sensors T, compute the O_T
         Attributes:
             subset_index (list): a subset of sensors T, guarantee sorted
+            cores (int): number of cores to do the parallel
         Return O_T
         '''
         if not subset_index:  # empty sequence are false
             return 0
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
-        cores = multiprocessing.cpu_count()
         prob = Parallel(n_jobs=cores)(delayed(self.inner_o_t)(subset_index, sub_cov_inv, transmitter_i) for transmitter_i in self.transmitters)
         o_t = 0
         for i in prob:
@@ -339,6 +338,49 @@ class SelectSensor:
         return o_t
 
 
+    def select_offline_greedy_p(self, budget, cores):
+        '''(Parallel version) Select a subset of sensors greedily. offline + homo version
+        Attributes:
+            budget (int): budget constraint
+            cores (int): number of cores for parallelzation
+        Return:
+            (list): a list of sensor index
+        '''
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+
+        while cost < budget and complement_index:
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
+
+            best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
+            maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
+            for candidate in candidate_results:
+                print(candidate[2], candidate[1])
+                if candidate[1] > maximum:
+                    best_candidate = candidate[0]
+                    maximum = candidate[1]
+
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            complement_index.remove(best_candidate)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+
+        self.update_subset(subset_index)
+        self.update_transmitters()
+
+        return subset_index
+
+
+    def inner_greedy(self, subset_index, candidate):
+        '''Inner loop for selecting candidates
+        '''
+        subset_index2 = copy.deepcopy(subset_index)
+        ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
+        o_t = self.o_t(subset_index2)
+        return (candidate, o_t, subset_index2)
+
+
     def select_offline_greedy(self, budget):
         '''Select a subset of sensors greedily. offline + homo version
         Attributes:
@@ -352,11 +394,11 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
 
         while cost < budget and complement_index:
-            maximum = self.o_t_p(subset_index)                # L in the paper
+            maximum = self.o_t_p(subset_index, 2)                # L in the paper
             best_candidate = complement_index[0]            # init the best candidate as the first one
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)     # guarantee subset_index always be sorted here
-                temp = self.o_t_p(subset_index)
+                temp = self.o_t_p(subset_index, 2)
                 print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
@@ -460,7 +502,7 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #selectsensor.no_selection()
 
-    subset_list = selectsensor.select_offline_greedy(10)
+    subset_list = selectsensor.select_offline_greedy_p(10, 2)
     print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_random(0.5)
