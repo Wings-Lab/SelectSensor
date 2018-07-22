@@ -15,6 +15,7 @@ from transmitter import Transmitter
 from utility import read_config
 from utility import ordered_insert
 
+# TODO: entropy
 
 class SelectSensor:
     '''Near-optimal low-cost sensor selection
@@ -177,6 +178,7 @@ class SelectSensor:
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                 transmitter.mean_vec.append(mean_std[0])
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
+
 
     def no_selection(self):
         '''The subset is all the sensors
@@ -414,6 +416,75 @@ class SelectSensor:
         return subset_index
 
 
+    def select_offline_hetero(self, budget, cores, cost_filename):
+        '''Offline selection when the sensors are heterogeneous
+           Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
+
+        Attributes:
+            budget (int): budget we have for the heterogeneous sensors
+            cores (int): number of cores for parallelization
+            cost_filename (str): file that has the cost of sensors
+        '''
+        energy = pd.read_csv(cost_filename, header=None)
+        series = energy[3]
+        series = series/series.max()  # normalize
+        size = series.count()
+        for sensor in self.sensors:
+            setattr(sensor, 'cost', series[random.randint(0, size-1)])
+        cache_ot = {}
+
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+
+        while cost < budget and complement_index:
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
+
+            best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
+            maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
+            for candidate in candidate_results:
+                print(candidate[2], candidate[1])
+                cache_ot[str(candidate[2])] = candidate[1]
+                if candidate[1] > maximum:
+                    best_candidate = candidate[0]
+                    maximum = candidate[1]
+
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            complement_index.remove(best_candidate)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+
+        while cost < budget and complement_index:
+            reduced_complement = copy.deepcopy(complement_index)
+            subset_index_copy = copy.deepcopy(subset_index)
+
+            for candidate in complement_index:
+                ordered_insert(subset_index_copy, candidate)
+                if cache_ot.get(str(subset_index_copy)):
+                    reduced_complement.remove(candidate)
+
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in reduced_complement)
+            best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
+            cost_of_candiate = self.sensors.get(sensor_list[best_candidate]).cost
+            maximum = candidate_results[0][1]/cost_of_candiate          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
+            for candidate in candidate_results:
+                print(candidate[2], candidate[1])
+                cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
+                new_value = candidate[1]/cost_of_candiate
+                if new_value > maximum:
+                    best_candidate = candidate[0]
+                    maximum = new_value
+
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            complement_index.remove(best_candidate)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+
+
     def select_subset_online(self):
         '''Select a subset of sensors greedily. online version
         '''
@@ -502,7 +573,8 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #selectsensor.no_selection()
 
-    subset_list = selectsensor.select_offline_greedy_p(10, 2)
+    #subset_list = selectsensor.select_offline_greedy_p(10, 2)
+    subset_list = selectsensor.select_offline_hetero(5, 4, 'data/energy.txt')
     print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_random(0.5)
