@@ -14,6 +14,7 @@ from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
 from utility import ordered_insert
+import plots
 
 # TODO: entropy
 
@@ -198,7 +199,7 @@ class SelectSensor:
 
 
     def update_transmitters(self):
-        '''Given a subset of sensors, update transmitter's multivariate gaussian
+        '''Given a subset of sensors, update transmitter's multivariate gaussian. For use before self.test_error
         '''
         for transmitter in self.transmitters:
             transmitter.mean_vec_sub = []
@@ -213,18 +214,29 @@ class SelectSensor:
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
 
-    def select_offline_random(self, fraction):
+    def select_offline_random(self, number):
         '''Select a subset of sensors randomly
         Attributes:
-            fraction (float): a fraction of sensors are randomly selected
+            number (int): number of sensors to be randomly selected
+        Return:
+            (list): results to be plotted. each element is (str, int, float),
+                    where str is the list of selected sensors, int is # of sensor, float is O_T
         '''
         self.subset = {}
-        size = int(self.sen_num * fraction)
+        subset_index = []
+        plot_data = []
         sequence = [i for i in range(self.sen_num)]
-        subset_index = random.sample(sequence, size)
-
-        self.update_subset(subset_index)
-        self.update_transmitters()
+        i = 1
+        while i <= number:
+            select = random.choice(sequence)
+            ordered_insert(subset_index, select)
+            o_t = self.o_t_p(subset_index, 2)
+            plot_data.append([str(subset_index), i, 1-o_t])
+            sequence.remove(select)
+            i += 1
+        #self.update_subset(subset_index)
+        #self.update_transmitters()
+        return plot_data
 
 
     def select_offline_farthest(self, fraction):
@@ -280,7 +292,12 @@ class SelectSensor:
         if not subset_index:  # empty sequence are false
             return 0
         sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+        sub_cov_inv = None
+        try:
+            sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+        except Exception as e:
+            print(e)
+
         prob = Parallel(n_jobs=cores)(delayed(self.inner_o_t)(subset_index, sub_cov_inv, transmitter_i) for transmitter_i in self.transmitters)
         o_t = 0
         for i in prob:
@@ -346,8 +363,11 @@ class SelectSensor:
             budget (int): budget constraint
             cores (int): number of cores for parallelzation
         Return:
-            (list): a list of sensor index
+            (list): an element is [str, int, float],
+                    where str is the list of subset_index, int is # of sensors, float is 1 - O_T
         '''
+        plot_data = []
+
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
@@ -367,11 +387,12 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
+            plot_data.append([str(subset_index), len(subset_index), 1 - maximum])
 
         self.update_subset(subset_index)
         self.update_transmitters()
 
-        return subset_index
+        return plot_data
 
 
     def inner_greedy(self, subset_index, candidate):
@@ -426,11 +447,11 @@ class SelectSensor:
             cost_filename (str): file that has the cost of sensors
         '''
         energy = pd.read_csv(cost_filename, header=None)
-        series = energy[3]
-        series = series/series.max()                        # normalize
-        size = series.count()
+        size = energy[1].count()
+        i = 0
         for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', series[random.randint(0, size-1)])
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
         cache_ot = {}
 
         sensor_list = list(self.sensors)                    # list of sensors' key
@@ -590,11 +611,14 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #selectsensor.no_selection()
 
-    #subset_list = selectsensor.select_offline_greedy_p(10, 2)
-    subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
-    print('The selected subset is: ', subset_list)
+    plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    #subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
+    #print('The selected subset is: ', subset_list)
 
-    #selectsensor.select_offline_random(0.5)
+    #plot_data = selectsensor.select_offline_random(20)
+    plots.save_data(plot_data, 'plot_data/Offline_Greedy.csv')
+
+
     #selectsensor.select_offline_farthest(0.5)
 
     #print('error ', selectsensor.test_error())
