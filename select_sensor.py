@@ -427,24 +427,24 @@ class SelectSensor:
         '''
         energy = pd.read_csv(cost_filename, header=None)
         series = energy[3]
-        series = series/series.max()  # normalize
+        series = series/series.max()                        # normalize
         size = series.count()
         for sensor in self.sensors:
-            setattr(sensor, 'cost', series[random.randint(0, size-1)])
+            setattr(self.sensors.get(sensor), 'cost', series[random.randint(0, size-1)])
         cache_ot = {}
 
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-
+        maximum = 0
         while cost < budget and complement_index:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
             maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
             for candidate in candidate_results:
-                print(candidate[2], candidate[1])
+                #print(candidate[2], candidate[1])
                 cache_ot[str(candidate[2])] = candidate[1]
                 if candidate[1] > maximum:
                     best_candidate = candidate[0]
@@ -453,36 +453,53 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-
-        sensor_list = list(self.sensors)                    # list of sensors' key
+        first_pass_result = (subset_index, maximum)         # the result of the first homo pass
+        # end of the first homo pass and start of the second hetero pass
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-
+        maximum = 0
+        base_ot = 0                                         # O_T from the previous iteration
         while cost < budget and complement_index:
+            cached_results = []
             reduced_complement = copy.deepcopy(complement_index)
-            subset_index_copy = copy.deepcopy(subset_index)
-
-            for candidate in complement_index:
-                ordered_insert(subset_index_copy, candidate)
-                if cache_ot.get(str(subset_index_copy)):
+            for candidate in complement_index:              # reuse the cached OT results from first homo pass
+                ordered_insert(subset_index, candidate)
+                if cache_ot.get(str(subset_index)):
+                    cached_results.append((candidate, cache_ot.get(str(subset_index)), copy.deepcopy(subset_index)))
                     reduced_complement.remove(candidate)
+                subset_index.remove(candidate)
 
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in reduced_complement)
-            best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
-            cost_of_candiate = self.sensors.get(sensor_list[best_candidate]).cost
-            maximum = candidate_results[0][1]/cost_of_candiate          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
-            for candidate in candidate_results:
-                print(candidate[2], candidate[1])
-                cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
-                new_value = candidate[1]/cost_of_candiate
-                if new_value > maximum:
-                    best_candidate = candidate[0]
-                    maximum = new_value
 
+            for cached_candidate in cached_results:
+                candidate_results.append(cached_candidate)
+            best_candidate = candidate_results[0][0]                       # an element of candidate_results is a tuple - (int, float, list)
+            cost_of_candiate = self.sensors.get(sensor_list[best_candidate]).cost
+            new_base_ot = candidate_results[0][1]
+            maximum = (candidate_results[0][1]-base_ot)/cost_of_candiate   # where int is the candidate, float is the O_T, list is the subset_list with new candidate
+            for candidate in candidate_results:
+                incre = candidate[1] - base_ot
+                cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
+                incre_cost = incre/cost_of_candiate     # increment of O_T devided by cost
+                #print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
+                if incre_cost > maximum:
+                    best_candidate = candidate[0]
+                    maximum = incre_cost
+                    new_base_ot = candidate[1]
+            base_ot = new_base_ot
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
+            print(subset_index, base_ot)
+        second_pass_result = (subset_index, base_ot)
+
+        print(first_pass_result)
+        print(second_pass_result)
+        if second_pass_result[1] > first_pass_result[1]:
+            return second_pass_result[0]
+        else:
+            return first_pass_result[0]
 
 
     def select_subset_online(self):
@@ -574,7 +591,7 @@ def main():
     #selectsensor.no_selection()
 
     #subset_list = selectsensor.select_offline_greedy_p(10, 2)
-    subset_list = selectsensor.select_offline_hetero(5, 4, 'data/energy.txt')
+    subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
     print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_random(0.5)
