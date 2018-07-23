@@ -117,7 +117,7 @@ class SelectSensor:
                     sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                     dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                     dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                    mean = 100 - 24.5*math.log(2*dist)
+                    mean = 100 - 22.2*math.log(2*dist)
                     f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
@@ -233,6 +233,7 @@ class SelectSensor:
             o_t = self.o_t_p(subset_index, 2)
             plot_data.append([str(subset_index), i, 1-o_t])
             sequence.remove(select)
+            print(i, 1-o_t)
             i += 1
         #self.update_subset(subset_index)
         #self.update_transmitters()
@@ -611,12 +612,14 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #selectsensor.no_selection()
 
-    plot_data = selectsensor.select_offline_greedy_p(20, 4)
-    #subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 40)
+    #plots.save_data(plot_data, 'plot_data/Offline_Greedy_30.csv')
+    
+	#subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
     #print('The selected subset is: ', subset_list)
 
-    #plot_data = selectsensor.select_offline_random(20)
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy.csv')
+    plot_data = selectsensor.select_offline_random(20)
+    plots.save_data(plot_data, 'plot_data/Offline_Random_30.csv')
 
 
     #selectsensor.select_offline_farthest(0.5)
