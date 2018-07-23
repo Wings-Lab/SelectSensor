@@ -214,10 +214,11 @@ class SelectSensor:
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
 
-    def select_offline_random(self, number):
+    def select_offline_random(self, number, cores):
         '''Select a subset of sensors randomly
         Attributes:
             number (int): number of sensors to be randomly selected
+            cores (int): number of cores for parallelization
         Return:
             (list): results to be plotted. each element is (str, int, float),
                     where str is the list of selected sensors, int is # of sensor, float is O_T
@@ -227,17 +228,29 @@ class SelectSensor:
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
         i = 1
+
+        subset_to_compute = []
         while i <= number:
             select = random.choice(sequence)
             ordered_insert(subset_index, select)
-            o_t = self.o_t_p(subset_index, 2)
-            plot_data.append([str(subset_index), i, 1-o_t])
+            subset_to_compute.append(copy.deepcopy(subset_index))
             sequence.remove(select)
-            print(i, 1-o_t)
             i += 1
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), 1 - result[1]])
+
         #self.update_subset(subset_index)
         #self.update_transmitters()
         return plot_data
+
+    def inner_random(self, subset_index):
+        '''Inner loop for random
+        '''
+        o_t = self.o_t(subset_index)
+        return (subset_index, o_t)
 
 
     def select_offline_farthest(self, fraction):
@@ -614,11 +627,11 @@ def main():
 
     #plot_data = selectsensor.select_offline_greedy_p(20, 40)
     #plots.save_data(plot_data, 'plot_data/Offline_Greedy_30.csv')
-    
+
 	#subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
     #print('The selected subset is: ', subset_list)
 
-    plot_data = selectsensor.select_offline_random(20)
+    plot_data = selectsensor.select_offline_random(20, 40)
     plots.save_data(plot_data, 'plot_data/Offline_Random_30.csv')
 
 
