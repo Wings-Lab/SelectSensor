@@ -245,10 +245,11 @@ class SelectSensor:
         #self.update_transmitters()
         return plot_data
 
+
     def inner_random(self, subset_index):
         '''Inner loop for random
         '''
-        o_t = self.o_t(subset_index)
+        o_t = self.o_t_approximate(subset_index)
         return (subset_index, o_t)
 
 
@@ -445,7 +446,7 @@ class SelectSensor:
         '''
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
-        o_t = self.o_t(subset_index2)
+        o_t = self.o_t_approximate(subset_index2)
         return (candidate, o_t, subset_index2)
 
 
@@ -720,11 +721,11 @@ def figure_1a(selectsensor):
        X - # of sensor
        Algorithm - Offline greedy and offline random
     '''
-    plot_data = selectsensor.select_offline_greedy_p(20, 40)
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy_30.csv')
+    plot_data = selectsensor.select_offline_greedy_p(5, 4)
+    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
-    plot_data = selectsensor.select_offline_random(20, 40)
-    plots.save_data(plot_data, 'plot_data/Offline_Random_30.csv')
+    plot_data = selectsensor.select_offline_random(5, 4)
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
 
 def figure_1b(selectsensor):
@@ -773,8 +774,10 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    plot_data = selectsensor.select_offline_greedy(10)
-    plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
+    figure_1a(selectsensor)
+
+    #plot_data = selectsensor.select_offline_greedy(10)
+    #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
     #figure_1b(selectsensor)
 
     #selectsensor.no_selection()
