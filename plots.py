@@ -14,7 +14,7 @@ def save_data(plot_data, file_path):
             f.write(str(data[1]) + ',' + str(data[2]) + '\n')
 
 
-def figure_1a(file_path):
+def figure_1a():
     '''Read data from file_path and plot it.
        X - # of sensors
        Y - Probability of error (1 - O_T)
@@ -24,4 +24,4 @@ def figure_1a(file_path):
 
 
 if __name__ == '__main__':
-    figure_1a('hehe')
+    figure_1a()

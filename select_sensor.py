@@ -16,7 +16,6 @@ from utility import read_config
 from utility import ordered_insert
 import plots
 
-# TODO: entropy
 
 class SelectSensor:
     '''Near-optimal low-cost sensor selection
@@ -117,7 +116,7 @@ class SelectSensor:
                     sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                     dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                     dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                    mean = 100 - 24.5*math.log(2*dist)
+                    mean = 100 - 22.2*math.log(2*dist)
                     f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
@@ -214,10 +213,11 @@ class SelectSensor:
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
 
-    def select_offline_random(self, number):
+    def select_offline_random(self, number, cores):
         '''Select a subset of sensors randomly
         Attributes:
             number (int): number of sensors to be randomly selected
+            cores (int): number of cores for parallelization
         Return:
             (list): results to be plotted. each element is (str, int, float),
                     where str is the list of selected sensors, int is # of sensor, float is O_T
@@ -227,16 +227,29 @@ class SelectSensor:
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
         i = 1
+
+        subset_to_compute = []
         while i <= number:
             select = random.choice(sequence)
             ordered_insert(subset_index, select)
-            o_t = self.o_t_p(subset_index, 2)
-            plot_data.append([str(subset_index), i, 1-o_t])
+            subset_to_compute.append(copy.deepcopy(subset_index))
             sequence.remove(select)
             i += 1
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), 1 - result[1]])
+
         #self.update_subset(subset_index)
         #self.update_transmitters()
         return plot_data
+
+    def inner_random(self, subset_index):
+        '''Inner loop for random
+        '''
+        o_t = self.o_t(subset_index)
+        return (subset_index, o_t)
 
 
     def select_offline_farthest(self, fraction):
@@ -453,9 +466,40 @@ class SelectSensor:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
 
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        self.subset = {}
+        subset_index = []
+        plot_data = []
+        sequence = [i for i in range(self.sen_num)]
+        cost = 0
+        subset_to_compute = []
+
+        while cost < budget:
+            option = []
+            for index in sequence:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(index)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+            select = random.choice(option)
+            ordered_insert(subset_index, select)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            sequence.remove(select)
+            cost += self.sensors.get(sensor_list[select]).cost
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), 1 - result[1]])
+
+        #self.update_subset(subset_index)
+        #self.update_transmitters()
+        return plot_data
 
 
-    def select_offline_hetero(self, budget, cores, cost_filename):
+
+    def select_offline_greedy_hetero(self, budget, cores, cost_filename):
         '''Offline selection when the sensors are heterogeneous
            Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
 
@@ -623,6 +667,30 @@ def new_data():
     selectsensor.generate_data('data/artificial_samples.csv')
 
 
+def figure_1a(selectsensor):
+    '''figure 1a
+    '''
+    plot_data = selectsensor.select_offline_greedy_p(20, 40)
+    plots.save_data(plot_data, 'plot_data/Offline_Greedy_30.csv')
+
+    plot_data = selectsensor.select_offline_random(20, 40)
+    plots.save_data(plot_data, 'plot_data/Offline_Random_30.csv')
+
+
+def figure_1b(selectsensor):
+    '''figure 1b
+    '''
+    #plot_data = []
+    #for i in range(1, 3):  # have many budgets
+    #    plot_data.append(selectsensor.select_offline_hetero(i, 4, 'data/energy.txt'))
+    #plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
+
+    plot_data = []
+    for i in range(1, 3):  # have many budgets
+        plot_data.append(selectsensor.select_offline_random_hetero(i, 4, 'data/energy.txt'))
+    plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
+
+
 def main():
     '''main
     '''
@@ -632,23 +700,18 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+
+    figure_1b(selectsensor)
+
     #selectsensor.no_selection()
 
     #plot_data = selectsensor.select_offline_greedy_p(20, 4)
-    plot_data = []
-    for i in range(1, 3):  # have many budgets
-        plot_data.append(selectsensor.select_offline_hetero(i, 4, 'data/energy.txt'))
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
-
-    plot_data = []
-    for i in range(1, 3):  # have many budgets
-        plot_data.append(selectsensor.select_offline_random_hetero(i, 4, 'data/energy.txt'))
-    plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
-
-    #print('The selected subset is: ', subset_list)
 
     #plot_data = selectsensor.select_offline_random(20)
+    #plot_data = selectsensor.select_offline_greedy_p(20, 40)
 
+	#subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
+    #print('The selected subset is: ', subset_list)
 
     #selectsensor.select_offline_farthest(0.5)
 
