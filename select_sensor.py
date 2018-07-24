@@ -370,6 +370,38 @@ class SelectSensor:
         return o_t
 
 
+    def o_t_approximate(self, subset_index):
+        '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
+        Attributes:
+            subset_index (list): a subset of sensors T, needs guarantee sorted
+        '''
+        if not subset_index:  # empty sequence are false
+            return -99999999999.
+        prob_error = []
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+
+        for transmitter_i in self.transmitters:
+            i_x, i_y = transmitter_i.x, transmitter_i.y
+            transmitter_i.set_mean_vec_sub(subset_index)
+            prob_i = []
+            for transmitter_j in self.transmitters:
+                j_x, j_y = transmitter_j.x, transmitter_j.y
+                if i_x == j_x and i_y == j_y:
+                    continue
+                transmitter_j.set_mean_vec_sub(subset_index)
+                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                prob_i.append(norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+            summation = 0
+            for i in prob_i:
+                summation += i
+            prob_error.append(summation * self.grid_priori[i_x][i_y])
+        error = 0
+        for i in prob_error:
+            error += i
+        return 1 - error
+
+
     def select_offline_greedy_p(self, budget, cores):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
         Attributes:
@@ -377,7 +409,7 @@ class SelectSensor:
             cores (int): number of cores for parallelzation
         Return:
             (list): an element is [str, int, float],
-                    where str is the list of subset_index, int is # of sensors, float is 1 - O_T
+                    where str is the list of subset_index, int is # of sensors, float is O_T
         '''
         plot_data = []
 
@@ -422,19 +454,21 @@ class SelectSensor:
         Attributes:
             budget (int): budget constraint
         Return:
-            (list): a list of sensor index
+            (list): an element is [str, int, float],
+                    where str is the list of subset_index, int is # of sensors, float is O_T
         '''
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+        plot_data = []
 
         while cost < budget and complement_index:
-            maximum = self.o_t_p(subset_index, 2)                # L in the paper
+            maximum = self.o_t_approximate(subset_index)                # L in the paper
             best_candidate = complement_index[0]            # init the best candidate as the first one
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)     # guarantee subset_index always be sorted here
-                temp = self.o_t_p(subset_index, 2)
+                temp = self.o_t_approximate(subset_index)
                 print(subset_index, temp)
                 if temp > maximum:
                     maximum = temp
@@ -442,12 +476,13 @@ class SelectSensor:
                 subset_index.remove(candidate)
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
+            plot_data.append([str(subset_index), len(subset_index), maximum])
             cost += self.sensors.get(sensor_list[best_candidate]).cost
 
         self.update_subset(subset_index)
         self.update_transmitters()
 
-        return subset_index
+        return plot_data
 
 
     def select_offline_random_hetero(self, budget, cores, cost_filename):
@@ -681,7 +716,9 @@ def new_data():
 
 
 def figure_1a(selectsensor):
-    '''figure 1a
+    '''Y - Probability of error
+       X - # of sensor
+       Algorithm - Offline greedy and offline random
     '''
     plot_data = selectsensor.select_offline_greedy_p(20, 40)
     plots.save_data(plot_data, 'plot_data/Offline_Greedy_30.csv')
@@ -691,7 +728,8 @@ def figure_1a(selectsensor):
 
 
 def figure_1b(selectsensor):
-    '''figure 1b
+    '''Y - Probability of error
+       X - Total budget
     '''
     plot_data = []
     for i in range(1, 4):  # have many budgets
@@ -704,6 +742,27 @@ def figure_1b(selectsensor):
     plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
 
 
+def figure_1c(selectsensor):
+    '''Y - Latency
+       X - Number of sensors selected
+       Algorithm - Offline greedy
+    '''
+    selectsensor.config['sensor_number'] = 20  # TODO need to deal with time
+    new_data()
+    plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    plots.save_data(plot_data, 'plot_data/Latency_20.csv')
+
+    selectsensor.config['sensor_number'] = 50
+    new_data()
+    plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    plots.save_data(plot_data, 'plot_data/Latency_50.csv')
+
+    selectsensor.config['sensor_number'] = 100
+    new_data()
+    plot_data = selectsensor.select_offline_greedy_p(20, 40)
+    plots.save_data(plot_data, 'plot_data/Latency_100.csv')
+
+
 def main():
     '''main
     '''
@@ -714,7 +773,9 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1b(selectsensor)
+    plot_data = selectsensor.select_offline_greedy(10)
+    plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
+    #figure_1b(selectsensor)
 
     #selectsensor.no_selection()
 
