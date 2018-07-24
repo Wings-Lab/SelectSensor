@@ -515,12 +515,17 @@ class SelectSensor:
             print(subset_index, base_ot)
         second_pass_result = (subset_index, base_ot)
 
-        print(first_pass_result)
-        print(second_pass_result)
         if second_pass_result[1] > first_pass_result[1]:
-            return second_pass_result[0]
+            return (second_pass_result[0], budget, 1-second_pass_result[1])
         else:
-            return first_pass_result[0]
+            return (first_pass_result[0], budget, 1-first_pass_result[1])
+
+        #print(first_pass_result)
+        #print(second_pass_result)
+        #if second_pass_result[1] > first_pass_result[1]:
+        #    return second_pass_result[0]
+        #else:
+        #    return first_pass_result[0]
 
 
     def select_subset_online(self):
@@ -611,12 +616,14 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #selectsensor.no_selection()
 
-    plot_data = selectsensor.select_offline_greedy_p(20, 4)
-    #subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    plot_data = []
+    for i in range(1, 3):  # have many budgets
+        plot_data.append(selectsensor.select_offline_hetero(i, 4, 'data/energy.txt'))
     #print('The selected subset is: ', subset_list)
 
     #plot_data = selectsensor.select_offline_random(20)
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy.csv')
+    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
 
 
     #selectsensor.select_offline_farthest(0.5)
