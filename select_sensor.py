@@ -437,6 +437,24 @@ class SelectSensor:
         return subset_index
 
 
+    def select_offline_random_hetero(self, budget, cores, cost_filename):
+        '''Offline selection when the sensors are heterogeneous
+           Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
+
+        Attributes:
+            budget (int): budget we have for the heterogeneous sensors
+            cores (int): number of cores for parallelization
+            cost_filename (str): file that has the cost of sensors
+        '''
+        energy = pd.read_csv(cost_filename, header=None)
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+
+
+
     def select_offline_hetero(self, budget, cores, cost_filename):
         '''Offline selection when the sensors are heterogeneous
            Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
@@ -620,10 +638,16 @@ def main():
     plot_data = []
     for i in range(1, 3):  # have many budgets
         plot_data.append(selectsensor.select_offline_hetero(i, 4, 'data/energy.txt'))
+    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
+
+    plot_data = []
+    for i in range(1, 3):  # have many budgets
+        plot_data.append(selectsensor.select_offline_random_hetero(i, 4, 'data/energy.txt'))
+    plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
+
     #print('The selected subset is: ', subset_list)
 
     #plot_data = selectsensor.select_offline_random(20)
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
 
 
     #selectsensor.select_offline_farthest(0.5)
