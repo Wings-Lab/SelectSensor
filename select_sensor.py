@@ -459,6 +459,8 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
+        random.seed(0)    # though algorithm is random, the results are the same every time
+
         energy = pd.read_csv(cost_filename, header=None)
         size = energy[1].count()
         i = 0
@@ -473,30 +475,29 @@ class SelectSensor:
         sequence = [i for i in range(self.sen_num)]
         cost = 0
         subset_to_compute = []
-
-        while cost < budget:
-            option = []
-            for index in sequence:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
-                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
-                    option.append(index)
-            if not option:                      # if there are no sensors that can be selected, then break
-                break
-            select = random.choice(option)
-            ordered_insert(subset_index, select)
-            subset_to_compute.append(copy.deepcopy(subset_index))
-            sequence.remove(select)
-            cost += self.sensors.get(sensor_list[select]).cost
+        for budget_i in range(1, budget):
+            while cost < budget_i:
+                option = []
+                for index in sequence:
+                    temp_cost = self.sensors.get(sensor_list[index]).cost
+                    if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                        option.append(index)
+                if not option:                      # if there are no sensors that can be selected, then break
+                    break
+                select = random.choice(option)
+                ordered_insert(subset_index, select)
+                subset_to_compute.append(copy.deepcopy(subset_index))
+                sequence.remove(select)
+                cost += self.sensors.get(sensor_list[select]).cost
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         for result in subset_results:
-            plot_data.append([str(result[0]), len(result[0]), 1 - result[1]])
+            plot_data.append((str(result[0]), len(result[0]), 1 - result[1]))
 
         #self.update_subset(subset_index)
         #self.update_transmitters()
         return plot_data
-
 
 
     def select_offline_greedy_hetero(self, budget, cores, cost_filename):
@@ -522,7 +523,15 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
         maximum = 0
         while cost < budget and complement_index:
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
+            option = []
+            for index in complement_index:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(index)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in option)
 
             best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
             maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
@@ -535,9 +544,12 @@ class SelectSensor:
 
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
+            #print(subset_index, maximum)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
         first_pass_result = (subset_index, maximum)         # the result of the first homo pass
-        # end of the first homo pass and start of the second hetero pass
+
+        #print('end of the first homo pass and start of the second hetero pass')
+
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -553,7 +565,15 @@ class SelectSensor:
                     reduced_complement.remove(candidate)
                 subset_index.remove(candidate)
 
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in reduced_complement)
+            option = []
+            for index in complement_index:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(index)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in option)
 
             for cached_candidate in cached_results:
                 candidate_results.append(cached_candidate)
@@ -574,20 +594,13 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            print(subset_index, base_ot)
+            #print(subset_index, base_ot)
         second_pass_result = (subset_index, base_ot)
 
         if second_pass_result[1] > first_pass_result[1]:
             return (second_pass_result[0], budget, 1-second_pass_result[1])
         else:
             return (first_pass_result[0], budget, 1-first_pass_result[1])
-
-        #print(first_pass_result)
-        #print(second_pass_result)
-        #if second_pass_result[1] > first_pass_result[1]:
-        #    return second_pass_result[0]
-        #else:
-        #    return first_pass_result[0]
 
 
     def select_subset_online(self):
@@ -680,14 +693,14 @@ def figure_1a(selectsensor):
 def figure_1b(selectsensor):
     '''figure 1b
     '''
-    #plot_data = []
-    #for i in range(1, 3):  # have many budgets
-    #    plot_data.append(selectsensor.select_offline_hetero(i, 4, 'data/energy.txt'))
-    #plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
-
     plot_data = []
-    for i in range(1, 3):  # have many budgets
-        plot_data.append(selectsensor.select_offline_random_hetero(i, 4, 'data/energy.txt'))
+    for i in range(1, 4):  # have many budgets
+        data = selectsensor.select_offline_greedy_hetero(i, 4, 'data/energy.txt')
+        print(data)
+        plot_data.append(data)
+    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
+
+    plot_data = selectsensor.select_offline_random_hetero(3, 4, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
 
 

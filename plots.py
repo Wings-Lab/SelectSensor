@@ -8,9 +8,10 @@ def save_data(plot_data, file_path):
         plot_data (list)
         file_path (str)
     '''
+    print('start saving data')
     with open(file_path, 'w') as f:
         for data in plot_data:
-            print(data)
+            #print(data)
             f.write(str(data[1]) + ',' + str(data[2]) + '\n')
 
 
