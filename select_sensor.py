@@ -448,6 +448,11 @@ class SelectSensor:
 
     def inner_greedy(self, subset_index, candidate):
         '''Inner loop for selecting candidates
+        Attributes:
+            subset_index (list):
+            candidate (int):
+        Return:
+            (tuple): (index, o_t_approx, new subset_index)
         '''
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
@@ -556,7 +561,6 @@ class SelectSensor:
         for sensor in self.sensors:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
-        cache_ot = {}
 
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
@@ -579,48 +583,36 @@ class SelectSensor:
             maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
             for candidate in candidate_results:
                 #print(candidate[2], candidate[1])
-                cache_ot[str(candidate[2])] = candidate[1]
                 if candidate[1] > maximum:
                     best_candidate = candidate[0]
                     maximum = candidate[1]
 
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
-            #print(subset_index, maximum)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
             o_t_real = self.o_t(subset_index)
             first_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
+            print(subset_index, o_t_real, cost)
 
-        #print('end of the first homo pass and start of the second hetero pass')
+        print('end of the first homo pass and start of the second hetero pass')
 
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
         maximum = 0
-        base_ot = 0                                         # O_T from the previous iteration
+        base_ot = 1 - 0.5*len(self.transmitters)            # O_T from the previous iteration
         second_pass_plot_data = []
         while cost < budget and complement_index:
-            cached_results = []
-            reduced_complement = copy.deepcopy(complement_index)
-            for candidate in complement_index:              # reuse the cached OT results from first homo pass
-                ordered_insert(subset_index, candidate)
-                if cache_ot.get(str(subset_index)):
-                    cached_results.append((candidate, cache_ot.get(str(subset_index)), copy.deepcopy(subset_index)))
-                    reduced_complement.remove(candidate)
-                subset_index.remove(candidate)
-
             option = []
             for index in complement_index:
                 temp_cost = self.sensors.get(sensor_list[index]).cost
                 if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
                     option.append(index)
-            if not option:                      # if there are no sensors that can be selected, then break
+            if not option:
                 break
 
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in option)
 
-            for cached_candidate in cached_results:
-                candidate_results.append(cached_candidate)
             best_candidate = candidate_results[0][0]                       # an element of candidate_results is a tuple - (int, float, list)
             cost_of_candiate = self.sensors.get(sensor_list[best_candidate]).cost
             new_base_ot = candidate_results[0][1]
@@ -640,7 +632,7 @@ class SelectSensor:
             cost += self.sensors.get(sensor_list[best_candidate]).cost
             o_t_real = self.o_t(subset_index)
             second_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
-            #print(subset_index, base_ot)
+            print(subset_index, o_t_real, cost)
 
         first_final_o_t = first_pass_plot_data[len(first_pass_plot_data)-1][2]
         second_final_o_t = second_pass_plot_data[len(second_pass_plot_data)-1][2]
@@ -858,12 +850,11 @@ def figure_1b(selectsensor):
        Algorithm - Offline greedy and offline random
     '''
 
-    plot_data = selectsensor.select_offline_random_hetero(30, 40, 'data/energy.txt')
+    plot_data = selectsensor.select_offline_random_hetero(20, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
     plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
-
 
 
 def figure_1c(selectsensor):
