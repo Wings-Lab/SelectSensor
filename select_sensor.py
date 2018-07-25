@@ -147,7 +147,7 @@ class SelectSensor:
         tran_x, tran_y = transmitter.x, transmitter.y
         data = []
         i = 0
-        while i < 1000:                   # sample 1000 times for a single transmitter
+        while i < 1000:                  # sample 1000 times for a single transmitter
             one_transmitter = []
             for sensor in self.sensors:  # for each transmitter, send signal to all sensors
                 sen_x, sen_y = sensor[0], sensor[1]
@@ -240,7 +240,7 @@ class SelectSensor:
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         for result in subset_results:
-            plot_data.append([str(result[0]), len(result[0]), 1 - result[1]])
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
 
         #self.update_subset(subset_index)
         #self.update_transmitters()
@@ -250,7 +250,7 @@ class SelectSensor:
     def inner_random(self, subset_index):
         '''Inner loop for random
         '''
-        o_t = self.o_t_approximate(subset_index)
+        o_t = self.o_t(subset_index)
         return (subset_index, o_t)
 
 
@@ -435,9 +435,10 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
             if latency:
-                plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is Latency
+                plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is latency
             else:
-                plot_data.append([str(subset_index), len(subset_index), 1 - maximum])        # Y value is Prob(error)
+                o_t_real = self.o_t(subset_index)
+                plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
 
         self.update_subset(subset_index)
         self.update_transmitters()
@@ -533,7 +534,7 @@ class SelectSensor:
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         for result in subset_results:
-            plot_data.append((str(result[0]), len(result[0]), 1 - result[1]))
+            plot_data.append((str(result[0]), len(result[0]), result[1]))
 
         #self.update_subset(subset_index)
         #self.update_transmitters()
@@ -638,9 +639,16 @@ class SelectSensor:
         second_pass_result = (subset_index, base_ot)
 
         if second_pass_result[1] > first_pass_result[1]:
-            return (second_pass_result[0], budget, 1-second_pass_result[1])
+            o_t_real = self.o_t(second_pass_result[0])
+            return (second_pass_result[0], budget, o_t_real)
         else:
-            return (first_pass_result[0], budget, 1-first_pass_result[1])
+            o_t_real = self.o_t(first_pass_result[0])
+            return (first_pass_result[0], budget, o_t_real)
+
+
+    def select_offline_coverage(self):
+        '''A coverage-based baseline
+        '''
 
 
     def select_subset_online(self):
@@ -694,16 +702,6 @@ class SelectSensor:
         return (x, y)
 
 
-    def print(self):
-        '''Print for testing
-        '''
-        for transmitter in self.transmitters:
-            print(transmitter)
-        #print('\ndata:\n')
-        #print(self.grid.shape, '\n', self.grid)
-        #print(self.covariance)
-
-
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -723,6 +721,7 @@ def new_data():
 def figure_1a(selectsensor):
     '''Y - Probability of error
        X - # of sensor
+       Homogeneous
        Algorithm - Offline greedy and offline random
     '''
     plot_data = selectsensor.select_offline_greedy_p(20, 40)
@@ -735,7 +734,14 @@ def figure_1a(selectsensor):
 def figure_1b(selectsensor):
     '''Y - Probability of error
        X - Total budget
+       Heterogeneous
+       Algorithm - Offline greedy and offline random
     '''
+
+    plot_data = []
+    plot_data = selectsensor.select_offline_random_hetero(30, 40, 'data/energy.txt')
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
+
     plot_data = []
     for i in range(2, 20, 2):  # have many budgets
         data = selectsensor.select_offline_greedy_hetero(i, 40, 'data/energy.txt')
@@ -743,8 +749,6 @@ def figure_1b(selectsensor):
         plot_data.append(data)
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_random_hetero(30, 40, 'data/energy.txt')
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
 
 def figure_1c(selectsensor):
@@ -772,7 +776,7 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1c(selectsensor)
+    figure_1b(selectsensor)
 
     #plot_data = selectsensor.select_offline_greedy(10)
     #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
@@ -791,7 +795,6 @@ def main():
     #selectsensor.select_offline_farthest(0.5)
 
     #print('error ', selectsensor.test_error())
-    #selectsensor.print()
 
 
 if __name__ == '__main__':
