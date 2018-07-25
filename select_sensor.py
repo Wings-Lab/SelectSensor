@@ -725,10 +725,10 @@ def figure_1a(selectsensor):
        X - # of sensor
        Algorithm - Offline greedy and offline random
     '''
-    plot_data = selectsensor.select_offline_greedy_p(5, 4)
+    plot_data = selectsensor.select_offline_greedy_p(20, 40)
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
-    plot_data = selectsensor.select_offline_random(5, 4)
+    plot_data = selectsensor.select_offline_random(40, 40)
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
 
@@ -737,14 +737,14 @@ def figure_1b(selectsensor):
        X - Total budget
     '''
     plot_data = []
-    for i in range(1, 4):  # have many budgets
-        data = selectsensor.select_offline_greedy_hetero(i, 4, 'data/energy.txt')
+    for i in range(2, 20, 2):  # have many budgets
+        data = selectsensor.select_offline_greedy_hetero(i, 40, 'data/energy.txt')
         print(data)
         plot_data.append(data)
-    plots.save_data(plot_data, 'plot_data/Offline_Greedy_15_hetero.csv')
+    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_random_hetero(3, 4, 'data/energy.txt')
-    plots.save_data(plot_data, 'plot_data/Offline_Random_15_hetero.csv')
+    plot_data = selectsensor.select_offline_random_hetero(30, 40, 'data/energy.txt')
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
 
 def figure_1c(selectsensor):
