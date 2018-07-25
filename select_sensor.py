@@ -4,6 +4,7 @@ Select sensor and detect transmitter
 import random
 import math
 import copy
+import time
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
@@ -403,7 +404,7 @@ class SelectSensor:
         return 1 - error
 
 
-    def select_offline_greedy_p(self, budget, cores):
+    def select_offline_greedy_p(self, budget, cores, latency=False):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
         Attributes:
             budget (int): budget constraint
@@ -418,7 +419,7 @@ class SelectSensor:
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-
+        start = time.time()
         while cost < budget and complement_index:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
 
@@ -433,7 +434,10 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            plot_data.append([str(subset_index), len(subset_index), 1 - maximum])
+            if latency:
+                plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is Latency
+            else:
+                plot_data.append([str(subset_index), len(subset_index), 1 - maximum])        # Y value is Prob(error)
 
         self.update_subset(subset_index)
         self.update_transmitters()
@@ -748,20 +752,14 @@ def figure_1c(selectsensor):
        X - Number of sensors selected
        Algorithm - Offline greedy
     '''
-    selectsensor.config['sensor_number'] = 20  # TODO need to deal with time
-    new_data()
-    plot_data = selectsensor.select_offline_greedy_p(20, 4)
-    plots.save_data(plot_data, 'plot_data/Latency_20.csv')
+    plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
+    plots.save_data(plot_data, 'plot_data2/Latency_20.csv')
 
-    selectsensor.config['sensor_number'] = 50
-    new_data()
-    plot_data = selectsensor.select_offline_greedy_p(20, 4)
-    plots.save_data(plot_data, 'plot_data/Latency_50.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
+    #plots.save_data(plot_data, 'plot_data2/Latency_50.csv')
 
-    selectsensor.config['sensor_number'] = 100
-    new_data()
-    plot_data = selectsensor.select_offline_greedy_p(20, 40)
-    plots.save_data(plot_data, 'plot_data/Latency_100.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
+    #plots.save_data(plot_data, 'plot_data2/Latency_100.csv')
 
 
 def main():
@@ -774,7 +772,7 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1a(selectsensor)
+    figure_1c(selectsensor)
 
     #plot_data = selectsensor.select_offline_greedy(10)
     #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
