@@ -638,8 +638,10 @@ class SelectSensor:
         second_final_o_t = second_pass_plot_data[len(second_pass_plot_data)-1][2]
 
         if second_final_o_t > first_final_o_t:
+            print('second pass is selected')
             return second_pass_plot_data
         else:
+            print('first pass is selected')
             return first_pass_plot_data
 
 

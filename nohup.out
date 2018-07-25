@@ -1,3 +1,0 @@
-Computed covariance!
-select_sensor.py:171: FutureWarning: Method .as_matrix will be removed in a future version. Use .values instead.
-  self.covariance = np.cov(data.as_matrix().T)  # compute covariance matrix by date from one transmitter
