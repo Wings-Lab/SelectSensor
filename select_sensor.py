@@ -563,6 +563,7 @@ class SelectSensor:
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
         maximum = 0
+        first_pass_plot_data = []
         while cost < budget and complement_index:
             option = []
             for index in complement_index:
@@ -587,7 +588,8 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             #print(subset_index, maximum)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-        first_pass_result = (subset_index, maximum)         # the result of the first homo pass
+            o_t_real = self.o_t(subset_index)
+            first_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
 
         #print('end of the first homo pass and start of the second hetero pass')
 
@@ -596,6 +598,7 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
         maximum = 0
         base_ot = 0                                         # O_T from the previous iteration
+        second_pass_plot_data = []
         while cost < budget and complement_index:
             cached_results = []
             reduced_complement = copy.deepcopy(complement_index)
@@ -635,20 +638,137 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
+            o_t_real = self.o_t(subset_index)
+            second_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
             #print(subset_index, base_ot)
-        second_pass_result = (subset_index, base_ot)
 
-        if second_pass_result[1] > first_pass_result[1]:
-            o_t_real = self.o_t(second_pass_result[0])
-            return (second_pass_result[0], budget, o_t_real)
+        first_final_o_t = first_pass_plot_data[len(first_pass_plot_data)-1][2]
+        second_final_o_t = second_pass_plot_data[len(second_pass_plot_data)-1][2]
+
+        if second_final_o_t > first_final_o_t:
+            return second_pass_plot_data
         else:
-            o_t_real = self.o_t(first_pass_result[0])
-            return (first_pass_result[0], budget, o_t_real)
+            return first_pass_plot_data
 
 
-    def select_offline_coverage(self):
-        '''A coverage-based baseline
+    def select_offline_coverage(self, budget, cores):
+        '''A coverage-based baseline algorithm
         '''
+        center = (int(self.grid_len/2), int(self.grid_len/2))
+        min_dis = 99999
+        first_index, i = 0, 0
+        first_sensor = None
+        for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            if temp_dis < min_dis:
+                min_dis = temp_dis
+                first_index = i
+                first_sensor = sensor
+            i += 1
+        subset_index = [first_index]
+        subset_to_compute = [copy.deepcopy(subset_index)]
+        complement_index = [i for i in range(self.sen_num)]
+        complement_index.remove(first_index)
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+
+        radius = 1
+        for i in range(1, int(self.grid_len/2)):    # compute 'radius'
+            transmitter_i = self.transmitters[(first_sensor[0] - i)*self.grid_len + first_sensor[1]] # 2D index --> 1D index
+            i_x, i_y = transmitter_i.x, transmitter_i.y
+            if i_x < 0:
+                break
+            transmitter_i.set_mean_vec_sub(subset_index)
+            prob_i = []
+            for transmitter_j in self.transmitters:
+                j_x, j_y = transmitter_j.x, transmitter_j.y
+                if i_x == j_x and i_y == j_y:
+                    continue
+                transmitter_j.set_mean_vec_sub(subset_index)
+                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+            product = 1
+            for prob in prob_i:
+                product *= prob
+            if product > 0.0001:     # set threshold
+                radius = i
+            else:
+                break
+
+        coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)  # TODO
+        self.add_coverage(coverage, first_sensor, radius)
+        cost = 1
+        while cost <= budget and complement_index:  # find the sensor that has the least overlap
+            least_overlap = 99999
+            best_candidate = []
+            best_sensor = []
+            for candidate in complement_index:
+                sensor = self.index_to_sensor(candidate)
+                overlap = self.compute_overlap(coverage, sensor, radius)
+                if overlap < least_overlap:
+                    least_overlap = overlap
+                    best_candidate = [candidate]
+                    best_sensor = [sensor]
+                elif overlap == least_overlap:
+                    best_candidate.append(candidate)
+                    best_sensor.append(sensor)
+            choose = random.choice(range(0, len(best_candidate)))
+            ordered_insert(subset_index, best_candidate[choose])
+            complement_index.remove(best_candidate[choose])
+            self.add_coverage(coverage, best_sensor[choose], radius)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        plot_data = []
+        for result in subset_results:
+            plot_data.append((str(result[0]), len(result[0]), result[1]))
+
+        return plot_data
+
+
+    def compute_overlap(self, coverage, sensor, radius):
+        '''Compute the overlap between selected sensors and the new sensor
+        '''
+        x_low = sensor[0] - radius if sensor[0] - radius >= 0 else 0
+        x_high = sensor[0] + radius if sensor[0] + radius <= self.grid_len-1 else self.grid_len-1
+        y_low = sensor[1] - radius if sensor[1] - radius >= 0 else 0
+        y_high = sensor[1] + radius if sensor[1] + radius <= self.grid_len-1 else self.grid_len-1
+
+        overlap = 0
+        for x in range(x_low, x_high+1):
+            for y in range(y_low, y_high):
+                if distance.euclidean([x, y], [sensor[0], sensor[1]]) <= radius:
+                    overlap += coverage[x][y]
+        return overlap
+
+
+    def index_to_sensor(self, index):
+        '''A temporary solution for the inappropriate data structure for self.sensors
+        '''
+        i = 0
+        for sensor in self.sensors:
+            if i == index:
+                return sensor
+            else:
+                i += 1
+
+    def add_coverage(self, coverage, sensor, radius):
+        '''When seleted a sensor, add coverage by 1
+        Attributes:
+            coverage (2D array): each element is a counter for coverage
+            sensor (tuple): (x, y)
+            radius (int): radius of a sensor
+        '''
+        x_low = sensor[0] - radius if sensor[0] - radius >= 0 else 0
+        x_high = sensor[0] + radius if sensor[0] + radius <= self.grid_len-1 else self.grid_len-1
+        y_low = sensor[1] - radius if sensor[1] - radius >= 0 else 0
+        y_high = sensor[1] + radius if sensor[1] + radius <= self.grid_len-1 else self.grid_len-1
+
+        for x in range(x_low, x_high+1):
+            for y in range(y_low, y_high+1):
+                if distance.euclidean([x, y], [sensor[0], sensor[1]]) <= radius:
+                    coverage[x][y] += 1
 
 
     def select_subset_online(self):
@@ -738,15 +858,10 @@ def figure_1b(selectsensor):
        Algorithm - Offline greedy and offline random
     '''
 
-    plot_data = []
     plot_data = selectsensor.select_offline_random_hetero(30, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
-    plot_data = []
-    for i in range(2, 20, 2):  # have many budgets
-        data = selectsensor.select_offline_greedy_hetero(i, 40, 'data/energy.txt')
-        print(data)
-        plot_data.append(data)
+    plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
 
@@ -775,8 +890,9 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-
+    #selectsensor.select_offline_coverage(10, 4)
     figure_1b(selectsensor)
+
 
     #plot_data = selectsensor.select_offline_greedy(10)
     #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
