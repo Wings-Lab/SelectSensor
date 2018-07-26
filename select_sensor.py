@@ -705,7 +705,7 @@ class SelectSensor:
             product = 1
             for prob in prob_i:
                 product *= prob
-            if product > 0.001:     # set threshold
+            if product > 0.00001:     # set threshold
                 radius = i
             else:
                 break
@@ -863,11 +863,11 @@ def figure_1a(selectsensor):
     #plot_data = selectsensor.select_offline_greedy_p(20, 4)
     #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_15.csv')
 
-    plot_data = selectsensor.select_offline_random(40, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    #plot_data = selectsensor.select_offline_random(40, 20)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
     plot_data = selectsensor.select_offline_coverage(30, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
+    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_00001.csv')
 
 
 def figure_1b(selectsensor):

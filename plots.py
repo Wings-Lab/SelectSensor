@@ -47,11 +47,11 @@ def figure_1a(greedy_file, coverage_file, random_file):
     plt.xticks(x_axis)
     y_axis = np.arange(0, 1.1, 0.1)
     plt.yticks(y_axis)
-    plt.savefig('plot/offline_homo_15.png')
+    plt.savefig('plot/offline_homo_30.png')
     plt.show()
 
 
 if __name__ == '__main__':
-    figure_1a('plot_data2/Offline_Greedy_15.csv', \
-              'plot_data2/Offline_Coverage_15.csv', \
-              'plot_data2/Offline_Random_15.csv')
+    figure_1a('plot_data2/Offline_Greedy_30.csv', \
+              'plot_data2/Offline_Coverage_30.csv', \
+              'plot_data2/Offline_Random_30.csv')
