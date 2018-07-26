@@ -2,7 +2,6 @@
 Plots
 '''
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 
 def save_data(plot_data, file_path):
@@ -27,6 +26,7 @@ def figure_1a(greedy_file, coverage_file, random_file):
         coverage_file (str):
         random_file (str)
     '''
+    import matplotlib.pyplot as plt
     df_greedy = pd.read_csv(greedy_file, header=None)
     df_coverage = pd.read_csv(coverage_file, header=None)
     df_random = pd.read_csv(random_file, header=None)
