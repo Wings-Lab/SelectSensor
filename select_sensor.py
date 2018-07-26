@@ -254,33 +254,6 @@ class SelectSensor:
         return (subset_index, o_t)
 
 
-    def select_offline_farthest(self, fraction):
-        '''select sensors based on largest distance sum
-        '''
-        self.subset = {}
-        sensor_list = list(self.sensors)           # list of sensors' key
-        size = int(self.sen_num * fraction)
-        start = random.randint(0, self.sen_num-1)  # the first sensor is randomly selected
-        i = 0
-        for key in self.sensors:
-            if i == start:
-                self.subset[key] = self.sensors[key]
-                sensor_list.remove(key)
-            i += 1
-        while len(self.subset) < size:
-            max_dist_sum = 0
-            max_key = (0, 0)
-            for key_candidate in sensor_list:
-                dist_sum = 0
-                for key_selected in self.subset:
-                    dist_sum += distance.euclidean([key_candidate[0], key_candidate[1]], [key_selected[0], key_selected[1]])
-                if dist_sum > max_dist_sum:
-                    max_key = key_candidate
-                    max_dist_sum = dist_sum
-            self.subset[max_key] = self.sensors.get(max_key)
-            sensor_list.remove(max_key)
-
-
     def covariance_sub(self, subset_index):
         '''Given a list of index of sensors, return the sub covariance matrix
         Attributes:
@@ -684,31 +657,8 @@ class SelectSensor:
         subset_to_compute = [copy.deepcopy(subset_index)]
         complement_index = [i for i in range(self.sen_num)]
         complement_index.remove(first_index)
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
 
-        radius = 1
-        for i in range(1, int(self.grid_len/2)):    # compute 'radius'
-            transmitter_i = self.transmitters[(first_sensor[0] - i)*self.grid_len + first_sensor[1]] # 2D index --> 1D index
-            i_x, i_y = transmitter_i.x, transmitter_i.y
-            if i_x < 0:
-                break
-            transmitter_i.set_mean_vec_sub(subset_index)
-            prob_i = []
-            for transmitter_j in self.transmitters:
-                j_x, j_y = transmitter_j.x, transmitter_j.y
-                if i_x == j_x and i_y == j_y:
-                    continue
-                transmitter_j.set_mean_vec_sub(subset_index)
-                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
-                prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
-            product = 1
-            for prob in prob_i:
-                product *= prob
-            if product > 0.0000001:     # set threshold
-                radius = i
-            else:
-                break
+        radius = self.compute_coverage_radius(first_sensor, subset_index) # compute the radius
 
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
@@ -727,7 +677,7 @@ class SelectSensor:
                 elif overlap == least_overlap:
                     best_candidate.append(candidate)
                     best_sensor.append(sensor)
-            choose = random.choice(range(0, len(best_candidate)))
+            choose = random.choice(range(len(best_candidate)))
             ordered_insert(subset_index, best_candidate[choose])
             complement_index.remove(best_candidate[choose])
             self.add_coverage(coverage, best_sensor[choose], radius)
@@ -741,6 +691,105 @@ class SelectSensor:
             plot_data.append((str(result[0]), len(result[0]), result[1]))
 
         return plot_data
+
+
+    def select_offline_coverage_hetero(self, budget, cores, cost_filename):
+        '''A coverage-based baseline algorithm (heterogeneous version)
+        '''
+        random.seed(0)
+        sensor_list = list(self.sensors)                    # list of sensors' key
+        energy = pd.read_csv(cost_filename, header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+
+        center = (int(self.grid_len/2), int(self.grid_len/2))
+        min_dis = 99999
+        first_index, i = 0, 0
+        first_sensor = None
+        for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            if temp_dis < min_dis:
+                min_dis = temp_dis
+                first_index = i
+                first_sensor = sensor
+            i += 1
+        subset_index = [first_index]
+        subset_to_compute = [copy.deepcopy(subset_index)]
+        complement_index = [i for i in range(self.sen_num)]
+        complement_index.remove(first_index)
+
+        radius = self.compute_coverage_radius(first_sensor, subset_index) # compute the radius
+
+        coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
+        self.add_coverage(coverage, first_sensor, radius)
+        cost = self.sensors.get(sensor_list[first_index]).cost
+
+        while cost < budget and complement_index:
+            min_overlap_cost = 99999   # to minimize overlap*cost
+            best_candidate = []
+            best_sensor = []
+            for candidate in complement_index:
+                sensor = self.index_to_sensor(candidate)
+                overlap = self.compute_overlap(coverage, sensor, radius)
+                cost = self.sensors.get(sensor_list[candidate]).cost
+                overlap_cost = (overlap+0.001)*cost
+                if overlap_cost < min_overlap_cost:
+                    min_overlap_cost = overlap_cost
+                    best_candidate = [candidate]
+                    best_sensor = [sensor]
+                elif overlap_cost == min_overlap_cost:
+                    best_candidate.append(candidate)
+                    best_sensor.append(sensor)
+            choose = random.choice(range(len(best_candidate)))
+            ordered_insert(subset_index, best_candidate[choose])
+            complement_index.remove(best_candidate[choose])
+            self.add_coverage(coverage, best_sensor[choose], radius)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        plot_data = []
+        for result in subset_results:
+            plot_data.append((str(result[0]), len(result[0]), result[1]))
+
+        return plot_data
+
+
+    def compute_coverage_radius(self, first_sensor, subset_index):
+        '''Compute the coverage radius for the coverage-based selection algorithm
+        Attibutes:
+            first_sensor (tuple): sensor that is closest to the center
+            subset_index (list):
+        '''
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+        radius = 1
+        for i in range(1, int(self.grid_len/2)):    # compute 'radius'
+            transmitter_i = self.transmitters[(first_sensor[0] - i)*self.grid_len + first_sensor[1]] # 2D index --> 1D index
+            i_x, i_y = transmitter_i.x, transmitter_i.y
+            if i_x < 0:
+                break
+            transmitter_i.set_mean_vec_sub(subset_index)
+            prob_i = []
+            for transmitter_j in self.transmitters:
+                j_x, j_y = transmitter_j.x, transmitter_j.y
+                if i_x == j_x and i_y == j_y:
+                    continue
+                transmitter_j.set_mean_vec_sub(subset_index)
+                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
+            product = 1
+            for prob in prob_i:
+                product *= prob
+            if product > 0.0001:     # set threshold
+                radius = i
+            else:
+                break
+        return radius
 
 
     def compute_overlap(self, coverage, sensor, radius):
@@ -860,14 +909,14 @@ def figure_1a(selectsensor):
        Homogeneous
        Algorithm - Offline greedy and offline random
     '''
-    plot_data = selectsensor.select_offline_greedy_p(20, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 20)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
     #plot_data = selectsensor.select_offline_random(40, 20)
     #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
-    #plot_data = selectsensor.select_offline_coverage(30, 20)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_0000001.csv')
+    plot_data = selectsensor.select_offline_coverage(20, 4)
+    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_15.csv')
 
 
 def figure_1b(selectsensor):
@@ -880,8 +929,11 @@ def figure_1b(selectsensor):
     #plot_data = selectsensor.select_offline_random_hetero(20, 40, 'data/energy.txt')
     #plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
+    #plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
+    #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
+
+    plot_data = selectsensor.select_offline_coverage_hetero(20, 40, 'data/energy.txt')
+    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
 
 
 def figure_1c(selectsensor):
@@ -908,8 +960,8 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    figure_1a(selectsensor)
 
+    figure_1b(selectsensor)
 
     #plot_data = selectsensor.select_offline_greedy(10)
     #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
@@ -921,11 +973,6 @@ def main():
 
     #plot_data = selectsensor.select_offline_random(20)
     #plot_data = selectsensor.select_offline_greedy_p(20, 40)
-
-	#subset_list = selectsensor.select_offline_hetero(1, 4, 'data/energy.txt')
-    #print('The selected subset is: ', subset_list)
-
-    #selectsensor.select_offline_farthest(0.5)
 
     #print('error ', selectsensor.test_error())
 
