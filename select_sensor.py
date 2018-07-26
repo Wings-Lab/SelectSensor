@@ -722,6 +722,7 @@ class SelectSensor:
         complement_index.remove(first_index)
 
         radius = self.compute_coverage_radius(first_sensor, subset_index) # compute the radius
+        print('radius', radius)
 
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
@@ -734,8 +735,8 @@ class SelectSensor:
             for candidate in complement_index:
                 sensor = self.index_to_sensor(candidate)
                 overlap = self.compute_overlap(coverage, sensor, radius)
-                cost = self.sensors.get(sensor_list[candidate]).cost
-                overlap_cost = (overlap+0.001)*cost
+                temp_cost = self.sensors.get(sensor_list[candidate]).cost
+                overlap_cost = (overlap+0.001)*temp_cost
                 if overlap_cost < min_overlap_cost:
                     min_overlap_cost = overlap_cost
                     best_candidate = [candidate]
@@ -750,6 +751,7 @@ class SelectSensor:
             subset_to_compute.append(copy.deepcopy(subset_index))
             cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost
 
+        print(len(subset_to_compute), subset_to_compute)
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         plot_data = []
