@@ -590,9 +590,8 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            o_t_real = self.o_t(subset_index)
-            first_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
-            print(subset_index, o_t_real, cost)
+            first_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            print(subset_index, maximum, cost)
 
         print('end of the first homo pass and start of the second hetero pass')
 
@@ -621,7 +620,7 @@ class SelectSensor:
                 incre = candidate[1] - base_ot
                 cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
                 incre_cost = incre/cost_of_candiate     # increment of O_T devided by cost
-                #print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
+                print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
                 if incre_cost > maximum:
                     best_candidate = candidate[0]
                     maximum = incre_cost
@@ -630,9 +629,23 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            o_t_real = self.o_t(subset_index)
-            second_pass_plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
-            print(subset_index, o_t_real, cost)
+            second_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            print(subset_index, base_ot, cost)
+
+        first_pass = []
+        for data in first_pass_plot_data:
+            first_pass.append(data[0])
+        second_pass = []
+        for data in second_pass_plot_data:
+            second_pass.append(data[0])
+
+        first_pass_o_ts = Parallel(n_jobs=len(first_pass_plot_data))(delayed(self.inner_greedy_hetero)(subset_index) for subset_index in first_pass)
+        second_pass_o_ts = Parallel(n_jobs=len(second_pass_plot_data))(delayed(self.inner_greedy_hetero)(subset_index) for subset_index in second_pass)
+
+        for i in range(len(first_pass_o_ts)):
+            first_pass_plot_data[i][2] = first_pass_o_ts[i]
+        for i in range(len(second_pass_o_ts)):
+            second_pass_plot_data[i][2] = second_pass_o_ts[i]
 
         first_final_o_t = first_pass_plot_data[len(first_pass_plot_data)-1][2]
         second_final_o_t = second_pass_plot_data[len(second_pass_plot_data)-1][2]
@@ -643,6 +656,13 @@ class SelectSensor:
         else:
             print('first pass is selected')
             return first_pass_plot_data
+
+
+    def inner_greedy_hetero(self, subset_index):
+        '''Compute o_t
+        '''
+        o_t = self.o_t(subset_index)
+        return o_t
 
 
     def select_offline_coverage(self, budget, cores):
@@ -852,8 +872,8 @@ def figure_1b(selectsensor):
        Algorithm - Offline greedy and offline random
     '''
 
-    plot_data = selectsensor.select_offline_random_hetero(20, 40, 'data/energy.txt')
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
+    #plot_data = selectsensor.select_offline_random_hetero(20, 40, 'data/energy.txt')
+    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
     plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
