@@ -668,6 +668,7 @@ class SelectSensor:
     def select_offline_coverage(self, budget, cores):
         '''A coverage-based baseline algorithm
         '''
+        random.seed(0)
         center = (int(self.grid_len/2), int(self.grid_len/2))
         min_dis = 99999
         first_index, i = 0, 0
@@ -704,15 +705,15 @@ class SelectSensor:
             product = 1
             for prob in prob_i:
                 product *= prob
-            if product > 0.0001:     # set threshold
+            if product > 0.001:     # set threshold
                 radius = i
             else:
                 break
 
-        coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)  # TODO
+        coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
         cost = 1
-        while cost <= budget and complement_index:  # find the sensor that has the least overlap
+        while cost < budget and complement_index:  # find the sensor that has the least overlap
             least_overlap = 99999
             best_candidate = []
             best_sensor = []
@@ -731,6 +732,7 @@ class SelectSensor:
             complement_index.remove(best_candidate[choose])
             self.add_coverage(coverage, best_sensor[choose], radius)
             subset_to_compute.append(copy.deepcopy(subset_index))
+            cost += 1
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
@@ -858,11 +860,14 @@ def figure_1a(selectsensor):
        Homogeneous
        Algorithm - Offline greedy and offline random
     '''
-    plot_data = selectsensor.select_offline_greedy_p(20, 40)
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_15.csv')
 
-    plot_data = selectsensor.select_offline_random(40, 40)
+    plot_data = selectsensor.select_offline_random(40, 20)
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+
+    plot_data = selectsensor.select_offline_coverage(30, 20)
+    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
 
 
 def figure_1b(selectsensor):
@@ -903,8 +908,7 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    #selectsensor.select_offline_coverage(10, 4)
-    figure_1b(selectsensor)
+    figure_1a(selectsensor)
 
 
     #plot_data = selectsensor.select_offline_greedy(10)
