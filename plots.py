@@ -43,7 +43,7 @@ def figure_1a(greedy_file, coverage_file, random_file):
     plt.xlabel('Number of Sensors Selected', fontsize=16)
     plt.ylabel('O_T = 1-Prob(error)', fontsize=16)
     plt.title('Comparation of Three Selection Algorithms (15*15 Grid, 20 Sensors)', fontsize=20)
-    x_axis = np.arange(1, 21, 1)
+    x_axis = np.arange(1, 31, 1)
     plt.xticks(x_axis)
     y_axis = np.arange(0, 1.1, 0.1)
     plt.yticks(y_axis)
