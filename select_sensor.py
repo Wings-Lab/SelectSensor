@@ -928,13 +928,13 @@ def figure_1b(selectsensor):
        Algorithm - Offline greedy and offline random
     '''
 
-    #plot_data = selectsensor.select_offline_random_hetero(20, 40, 'data/energy.txt')
-    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
+    plot_data = selectsensor.select_offline_random_hetero(15, 40, 'data/energy.txt')
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
     #plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
     #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_coverage_hetero(20, 40, 'data/energy.txt')
+    plot_data = selectsensor.select_offline_coverage_hetero(15, 40, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
 
 
