@@ -199,7 +199,8 @@ class SelectSensor:
 
 
     def update_transmitters(self):
-        '''Given a subset of sensors, update transmitter's multivariate gaussian. For use before self.test_error
+        '''Given a subset of sensors' index, 
+           update each transmitter's mean vector sub and multivariate gaussian function
         '''
         for transmitter in self.transmitters:
             transmitter.mean_vec_sub = []
@@ -209,7 +210,7 @@ class SelectSensor:
             for x in self.subset_index:
                 row = []
                 for y in self.subset_index:
-                    row.append(self.covariance[x][y])
+                    row.append(self.covariance[x][y])  # TODO optimizaiton using numpy.ndarray instead of list
                 new_cov.append(row)
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
@@ -411,7 +412,7 @@ class SelectSensor:
                 plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is latency
             else:
                 o_t_real = self.o_t(subset_index)
-                plot_data.append([str(subset_index), len(subset_index), o_t_real])           # Y value is real o_t
+                plot_data.append([str(subset_index), len(subset_index), o_t_real]) # TODO optimization can be done here. like the hetero version
 
         self.update_subset(subset_index)
         self.update_transmitters()
@@ -889,6 +890,106 @@ class SelectSensor:
         return (x, y)
 
 
+    def select_online_greedy(self, budget):
+        '''The online sensor selection
+        Attributes:
+            budget (int)
+        '''
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+
+        cost = 0
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        plot_data = []
+
+        while cost < budget and complement_index:
+            maximum = self.mutual_information(subset_index)
+            best_candidate = complement_index[0]
+            for candidate in complement_index:
+                ordered_insert(subset_index, candidate)
+                temp = self.mutual_information(subset_index)
+                print(subset_index, temp)
+                if temp > maximum:
+                    maximum = temp
+                    best_candidate = candidate
+                subset_index.remove(candidate)
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            plot_data.append([str(subset_index), len(subset_index), maximum])
+            cost += 1
+            self.update_hypothesis(true_transmitter, subset_index)
+
+
+    def update_hypothesis(self, true_transmitter, subset_index):
+        '''Use Bayes formula to update P(hypothesis): form prior to posterior
+        Attributes:
+            true_transmitter (Transmitter)
+            subset_index (list)
+        '''
+        self.subset_index = subset_index
+        self.update_transmitters()
+        true_x, true_y = true_transmitter.x, true_transmitter.y
+        data = []                          # the true transmitter generate some data
+        sensor_list = list(self.sensors)
+        for sensor in sensor_list:
+            mean, std = self.means_stds.get((true_x, true_y, sensor[0], sensor[1]))
+            data.append(np.random.normal(mean, std))
+        for trans in self.transmitters:
+            likelihood = trans.multivariant_gaussian(data)
+            self.grid_priori[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
+        denominator = self.grid_posterior.sum()
+        try:
+            self.grid_posterior = self.grid_posterior/denominator
+        except Exception as e:
+            print(e)
+
+
+
+    def mutual_information(self, subset_index):
+        '''Mutual information of a subset of sensors
+        Attributes:
+            subset_index (list)
+        '''
+        if not subset_index:
+            return 0
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)
+        cache = {}       # cache P(j|i) -- P(R2=r2|R1=r1) -- P(X_T|Hi)
+
+        for transmitter_r2 in self.transmitters:                         # P(R2=r2), the location detected by a subset of sensors
+            j = transmitter_r2.x * self.grid_len + transmitter_r2.y      # 2D location --> 1D index
+            transmitter_r2.set_mean_vec_sub(subset_index)
+            for transmitter_r1 in self.transmitters:                     # P(R1=r1) = P(Hi), the true location of transmitter
+                i = transmitter_r1.x * self.grid_len + transmitter_r2.y  # 2D location --> 1D index
+                if j == i:
+                    continue                                             # deal with j==i until every j!=i is computed
+                transmitter_r1.set_mean_vec_sub(subset_index)
+                pj_pi = np.array(transmitter_r2) - np.array(transmitter_r1)
+                cache[(j, i)] = norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+
+        size = len(self.transmitters)
+        for i in range(size):                                            # deal with j==i case
+            product = 1
+            for k in range(size):
+                if k != i:
+                    product *= (1-cache.get((k, i)))
+            cache[(i, i)] = product
+
+        # now every P(j|i) is cached, we can finally compute the mutual information now
+        mi = 0                                                           # mutual information
+        for j in range(size):                                            # j is R2=r2
+            prob_r2 = 0
+            for k in range(size):                                        # compute P(R2=r2)
+                x, y = self.index_inverse(k)
+                prob_r2 += (cache.get((j, k)) * self.grid_priori[x][y])
+            for i in range(size):                                        # i is R1=r1
+                x, y = self.index_inverse(i)
+                mi += (cache.get((j, i)) * self.grid_priori[x][y] * math.log2(cache.get((j, i)) / prob_r2))
+
+        return mi
+
+
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -963,7 +1064,10 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1b(selectsensor)
+    plot_data = selectsensor.select_online_greedy(5)
+    plots.save_data(plot_data, 'plot_data2/Online_Greedy_15.csv')
+
+    #figure_1b(selectsensor)
 
     #plot_data = selectsensor.select_offline_greedy(10)
     #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
