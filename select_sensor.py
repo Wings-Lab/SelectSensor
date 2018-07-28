@@ -840,10 +840,6 @@ class SelectSensor:
                     coverage[x][y] += 1
 
 
-    def select_subset_online(self):
-        '''Select a subset of sensors greedily. online version
-        '''
-
     def test_error(self):
         '''Generate new data, calculate posterior probability, compute classification error.
            For each transmitter, test 10 times
@@ -891,8 +887,8 @@ class SelectSensor:
         return (x, y)
 
 
-    def select_online_greedy(self, budget):
-        '''The online sensor selection
+    def select_online_random(self, budget):
+        '''The online random selection
         Attributes:
             budget (int)
         '''
@@ -901,11 +897,49 @@ class SelectSensor:
         rand = random.randint(0, self.grid_len*self.grid_len-1)
         true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
-        cost = 0
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         plot_data = []
         self.print_priori()
+        cost = 0
+
+        while cost < budget and complement_index:
+            maximum = self.mutual_information(subset_index)
+            best_candidate = complement_index[0]
+            for candidate in complement_index:
+                ordered_insert(subset_index, candidate)
+                temp = self.mutual_information(subset_index)
+                print(subset_index, 'MI =', temp)
+                if temp > maximum:
+                    maximum = temp
+                    best_candidate = candidate
+                subset_index.remove(candidate)
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            plot_data.append([str(subset_index), len(subset_index), maximum])
+            cost += 1
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            self.print_priori()
+            print('\n')
+        return plot_data
+
+
+    def select_online_greedy(self, budget):
+        '''The online greedy selection
+        Attributes:
+            budget (int)
+        '''
+        random.seed(1)
+        np.random.seed(2)
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        print('true transmitter', true_transmitter)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        plot_data = []
+        self.print_priori()
+        cost = 0
 
         while cost < budget and complement_index:
             maximum = self.mutual_information(subset_index)
