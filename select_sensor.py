@@ -388,7 +388,6 @@ class SelectSensor:
         '''
         plot_data = []
 
-        sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -406,7 +405,7 @@ class SelectSensor:
 
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += 1
             if latency:
                 plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is latency
             else:
@@ -461,7 +460,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             plot_data.append([str(subset_index), len(subset_index), maximum])
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += 1
 
         self.update_subset(subset_index)
         self.update_transmitters()
@@ -571,7 +570,6 @@ class SelectSensor:
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-        maximum = 0
         base_ot = 1 - 0.5*len(self.transmitters)            # O_T from the previous iteration
         second_pass_plot_data = []
         while cost < budget and complement_index:
@@ -923,8 +921,70 @@ class SelectSensor:
         return plot_data
 
 
+    def select_online_greedy_hetero(self, budget, cores, cost_filename):
+        '''Heterogeneous version of online greedy selection
+        Attributes:
+            budget (int): amount of budget, in the homo case, every sensor has budget=1
+            cores (int): number of cores used in the parallezation
+            cost_filename (str): file that has the cost of sensors
+        '''
+        random.seed(1)
+        plot_data = []
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[210]         # in online selection, there is one true transmitter somewhere
+        print('true transmitter', true_transmitter)
+        energy = pd.read_csv(cost_filename, header=None)
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+        number_hypotheses = 10*len(self.transmitters)
+        sensor_list = list(self.sensors)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        cost = 0
+
+        while cost < budget and complement_index:
+            print(cost, budget)
+            option = []
+            for index in complement_index:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:
+                    option.append(index)
+            if not option:
+                break
+
+            true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, true_hypotheses, candidate) \
+                                for candidate in option)
+
+            best_candidate = candidate_results[0][0]
+            cost_of_candidate = self.sensors.get(sensor_list[best_candidate]).cost
+            maximum = candidate_results[0][1]/cost_of_candidate
+            for candidate in candidate_results:
+                mi_incre = candidate[1]
+                cost_of_candidate = self.sensors.get(sensor_list[candidate[0]]).cost
+                mi_incre_cost = mi_incre/cost_of_candidate
+                print(candidate[0], mi_incre, cost_of_candidate, mi_incre_cost)
+                if mi_incre_cost > maximum:
+                    maximum = mi_incre_cost
+                    best_candidate = candidate[0]
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            self.print_grid(self.grid_priori)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            plot_data.append([str(subset_index), len(subset_index), maximum])
+        return plot_data
+
+
     def select_online_greedy_p(self, budget, cores):
         '''(Parallel version) of online greedy selection
+        Attributes:
+            budget (int): amount of budget, in the homo case, every sensor has budget=1
+            cores (int): number of cores used in the parallezation
         '''
         plot_data = []
         random.seed(1)
@@ -939,7 +999,8 @@ class SelectSensor:
 
         while cost < budget and complement_index:
             true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, candidate, true_hypotheses) for candidate in complement_index)
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, true_hypotheses, candidate) \
+                                for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]
             maximum = candidate_results[0][1]
@@ -959,7 +1020,7 @@ class SelectSensor:
         return plot_data
 
 
-    def inner_online_greedy(self, subset_index, candidate, true_hypotheses):
+    def inner_online_greedy(self, subset_index, true_hypotheses, candidate):
         '''The inner loop for online greedy
         Attributes:
             subset_index (list):
@@ -1007,10 +1068,10 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
             plot_data.append([str(subset_index), len(subset_index), maximum])
-            cost += 1
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
+            cost += 1
         return plot_data
 
 
@@ -1210,7 +1271,8 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(5, 4)
+    #plot_data = selectsensor.select_online_greedy_p(5, 4)
+    plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_15.csv')
 
     #figure_1b(selectsensor)
