@@ -15,6 +15,7 @@ from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config
 from utility import ordered_insert
+from it_tool import InformationTheoryTool
 import plots
 
 
@@ -57,7 +58,7 @@ class SelectSensor:
         '''
         uniform = 1./(self.grid_len * self.grid_len)
         self.grid_priori = np.full((self.grid_len, self.grid_len), uniform)
-        self.grid_posterior = self.grid_priori
+        self.grid_posterior = np.full((self.grid_len, self.grid_len), uniform)
 
 
     def init_transmitters(self):
@@ -209,12 +210,7 @@ class SelectSensor:
             transmitter.mean_vec_sub = []
             for index in self.subset_index:
                 transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
-            new_cov = []
-            for x in self.subset_index:
-                row = []
-                for y in self.subset_index:
-                    row.append(self.covariance[x][y])
-                new_cov.append(row)
+            new_cov = self.covariance[np.ix_(self.subset_index, self.subset_index)]
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
 
@@ -902,7 +898,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         plot_data = []
-        self.print_priori()
+        self.print_grid(self.grid_priori)
         cost = 0
 
         while cost < budget and complement_index:
@@ -922,7 +918,7 @@ class SelectSensor:
             cost += 1
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
-            self.print_priori()
+            self.print_grid(self.grid_priori)
             print('\n')
         return plot_data
 
@@ -940,7 +936,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         plot_data = []
-        self.print_priori()
+        self.print_grid(self.grid_priori)
         number_hypotheses = 10*len(self.transmitters)
         cost = 0
 
@@ -962,7 +958,7 @@ class SelectSensor:
             cost += 1
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
-            self.print_priori()
+            self.print_grid(self.grid_priori)
             print('\n')
         return plot_data
 
@@ -980,14 +976,15 @@ class SelectSensor:
         print(']')
 
 
-    def print_priori(self):
-        '''Print priori matrix
+    def print_grid(self, grid):
+        '''Print priori or posterior grid
         '''
-        size = len(self.grid_priori)
+        size = len(grid)
+        print('\n')
         for i in range(size):
             print('[', end=' ')
             for j in range(size):
-                print('%.5f' % self.grid_priori[i][j], end=' ')
+                print('%.5f' % grid[i][j], end=' ')
             print(']')
 
 
@@ -1013,7 +1010,7 @@ class SelectSensor:
         denominator = self.grid_posterior.sum()
         try:
             self.grid_posterior = self.grid_posterior/denominator
-            self.grid_priori = self.grid_posterior   # the posterior in this iteration will be the prior in the next iteration
+            self.grid_priori = copy.deepcopy(self.grid_posterior)   # the posterior in this iteration will be the prior in the next iteration
         except Exception as e:
             print(e)
             print('denominator', denominator)
@@ -1079,10 +1076,12 @@ class SelectSensor:
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
                 self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
+            #self.print_grid(self.grid_posterior)
             r2 = np.argmax(self.grid_posterior)
             sensor_observe.append(r2)
-        
-        
+        data = np.array([true_hypotheses, sensor_observe])
+        it_tool = InformationTheoryTool(data)
+        return it_tool.mutual_information(0, 1)
 
 
 def new_data():

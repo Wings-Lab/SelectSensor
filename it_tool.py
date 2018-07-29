@@ -11,7 +11,6 @@ from __future__ import division
 import math
 import time
 from numpy  import array, shape, where, in1d
-import nose
 
 class InformationTheoryTool:
     '''Compute Entropy and mutual information
@@ -20,7 +19,7 @@ class InformationTheoryTool:
         """
         """
         # Check if all rows have the same length
-        assert (len(data.shape) == 2)
+        assert len(data.shape) == 2
         # Save data
         self.data = data
         self.n_rows = data.shape[0]
@@ -32,7 +31,7 @@ class InformationTheoryTool:
         Calculate the entropy of a random variable
         """
         # Check if index are into the bounds
-        assert (x_index >= 0 and x_index <= self.n_rows)
+        assert x_index >= 0 and x_index <= self.n_rows
         # Variable to return entropy
         summation = 0.0
         # Get uniques values of random variables
@@ -58,8 +57,8 @@ class InformationTheoryTool:
         """
         Calculate the entropy between two random variable
         """
-        assert (x_index >= 0 and x_index <= self.n_rows)
-        assert (y_index >= 0 and y_index <= self.n_rows)
+        assert x_index >= 0 and x_index <= self.n_rows
+        assert y_index >= 0 and y_index <= self.n_rows
         # Variable to return MI
         summation = 0.0
         # Get uniques values of random variables
@@ -85,14 +84,13 @@ class InformationTheoryTool:
             return - summation
 
 
-
-    def mutual_information(self, x_index, y_index, log_base, debug=False):
+    def mutual_information(self, x_index, y_index, debug=False):
         """
         Calculate and return Mutual information between two random variables
         """
         # Check if index are into the bounds
-        assert (x_index >= 0 and x_index <= self.n_rows)
-        assert (y_index >= 0 and y_index <= self.n_rows)
+        assert x_index >= 0 and x_index <= self.n_rows
+        assert y_index >= 0 and y_index <= self.n_rows
         # Variable to return MI
         summation = 0.0
         # Get uniques values of random variables
@@ -111,7 +109,7 @@ class InformationTheoryTool:
                 pxy = len(where(in1d(where(self.data[x_index] == value_x)[0], \
                                 where(self.data[y_index] == value_y)[0]) == True)[0]) / self.n_cols
                 if pxy > 0.0:
-                    summation += pxy * math.log((pxy / (px*py)), log_base)
+                    summation += pxy * math.log2((pxy / (px*py)))
                 if debug:
                     print('(%d,%d) px:%f py:%f pxy:%f' % (value_x, value_y, px, py, pxy))
         return summation
@@ -121,9 +119,9 @@ def test():
     '''some test
     '''
     # Define data array
-    data = array([(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
-                  (3, 4, 5, 5, 3, 2, 2, 6, 6, 1),
-                  (7, 2, 1, 3, 2, 8, 9, 1, 2, 0),
+    data = array([(0, 1, 2, 3, 3, 4, 5, 5, 6, 6),
+                  (0, 0, 2, 3, 2, 4, 4, 5, 6, 5),
+                  (0, 1, 2, 3, 3, 4, 5, 5, 5, 5),
                   (7, 7, 7, 7, 7, 7, 7, 7, 7, 7),
                   (0, 1, 2, 3, 4, 5, 6, 7, 1, 1)])
     # Create object
@@ -142,76 +140,37 @@ def test():
     print('Entropy(X_3): %f' % it_tool.single_entropy(3, 10))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
-    # entropy of  X_4 (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-    t_start = time.time()
-    print('Entropy(X_4): %f' % it_tool.single_entropy(4, 10))
-    print('Elapsed time: %f\n' % (time.time() - t_start))
-
     # --- Checking entropy between two random variables
 
     # entropy of  X_0 (0, 0, 1, 1, 0, 1, 1, 2, 2, 2) and X_1 (3, 4, 5, 5, 3, 2, 2, 6, 6, 1)
     t_start = time.time()
     print('Entropy(X_0, X_1): %f' % it_tool.entropy(0, 1, 10))
     print('Elapsed time: %f\n' % (time.time() - t_start))
-
-    # entropy of  X_3 (7, 7, 7, 7, 7, 7, 7, 7, 7, 7) and X_3 (7, 7, 7, 7, 7, 7, 7, 7, 7, 7)
-    t_start = time.time()
-    print('Entropy(X_3, X_3): %f' % it_tool.entropy(3, 3, 10))
-    print('Elapsed time: %f\n' % (time.time() - t_start))
     '''
-
 
     # ---Checking Mutual Information between two random variables
 
     # Print mutual information between X_0 (0,0,1,1,0,1,1,2,2,2) and X_1 (3,4,5,5,3,2,2,6,6,1)
     t_start = time.time()
-    print('MI(X_0, X_1): %f' % it_tool.mutual_information(0, 1, 10))
-    print('Elapsed time: %f\n' % (time.time() - t_start))
-
-    # Print mutual information between X_1 (3,4,5,5,3,2,2,6,6,1) and X_2 (7,2,1,3,2,8,9,1,2,0)
-    t_start = time.time()
-    print('MI(X_1, X_2): %f' % it_tool.mutual_information(1, 2, 10))
+    print('MI(X_0, X_0): %f' % it_tool.mutual_information(0, 0))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
     t_start = time.time()
-    print('MI(X_0, X_3): %f' % it_tool.mutual_information(0, 3, 10))
+    print('MI(X_0, X_1): %f' % it_tool.mutual_information(0, 1))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
     t_start = time.time()
-    print('MI(X_0, X_0): %f' % it_tool.mutual_information(0, 0, 10))
+    print('MI(X_0, X_2): %f' % it_tool.mutual_information(0, 2))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
     t_start = time.time()
-    print('MI(X_0, X_1): %f' % it_tool.mutual_information(0, 1, 10))
+    print('MI(X_0, X_3): %f' % it_tool.mutual_information(0, 3))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
     t_start = time.time()
-    print('MI(X_0, X_2): %f' % it_tool.mutual_information(0, 2, 10))
+    print('MI(X_3, X_3): %f' % it_tool.mutual_information(3, 3))
     print('Elapsed time: %f\n' % (time.time() - t_start))
 
-    t_start = time.time()
-    print('MI(X_3, X_3): %f' % it_tool.mutual_information(3, 3, 10))
-    print('Elapsed time: %f\n' % (time.time() - t_start))
-
-
-    # --- Checking results
-
-    # Checking entropy results
-    for i in range(0, data.shape[0]):
-        assert(it_tool.entropy(i, i, 10) == it_tool.single_entropy(i, 10))
-
-    # Checking mutual information results
-    # MI(X,Y) = H(X) + H(Y) - H(X,Y)
-    n_rows = data.shape[0]
-    i = 0
-    while i < n_rows:
-        j = i + 1
-        while j < n_rows:
-            if j != i:
-                nose.tools.assert_almost_equal(it_tool.mutual_information(i, j, 10), \
-                it_tool.single_entropy(i, 10)+it_tool.single_entropy(j, 10)-it_tool.entropy(i, j, 10))
-            j += 1
-        i += 1
 
 if __name__ == '__main__':
     test()
