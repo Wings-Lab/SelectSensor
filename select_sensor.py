@@ -223,7 +223,6 @@ class SelectSensor:
             (list): results to be plotted. each element is (str, int, float),
                     where str is the list of selected sensors, int is # of sensor, float is O_T
         '''
-        self.subset = {}
         subset_index = []
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
@@ -242,8 +241,6 @@ class SelectSensor:
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
-        #self.update_subset(subset_index)
-        #self.update_transmitters()
         return plot_data
 
 
@@ -440,7 +437,6 @@ class SelectSensor:
             (list): an element is [str, int, float],
                     where str is the list of subset_index, int is # of sensors, float is O_T
         '''
-        sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -461,9 +457,6 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             plot_data.append([str(subset_index), len(subset_index), maximum])
             cost += 1
-
-        self.update_subset(subset_index)
-        self.update_transmitters()
 
         return plot_data
 
@@ -883,44 +876,6 @@ class SelectSensor:
         return (x, y)
 
 
-    def select_online_random(self, budget):
-        '''The online random selection
-        Attributes:
-            budget (int)
-        '''
-        random.seed(1)
-        np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
-        print('true transmitter', true_transmitter)
-        subset_index = []
-        complement_index = [i for i in range(self.sen_num)]
-        plot_data = []
-        self.print_grid(self.grid_priori)
-        cost = 0
-
-        while cost < budget and complement_index:
-            maximum = self.mutual_information(subset_index, true_transmitter)
-            best_candidate = complement_index[0]
-            for candidate in complement_index:
-                ordered_insert(subset_index, candidate)
-                temp = self.mutual_information(subset_index, true_transmitter)
-                print(subset_index, 'MI =', temp)
-                if temp > maximum:
-                    maximum = temp
-                    best_candidate = candidate
-                subset_index.remove(candidate)
-            ordered_insert(subset_index, best_candidate)
-            complement_index.remove(best_candidate)
-            plot_data.append([str(subset_index), len(subset_index), maximum])
-            cost += 1
-            self.print_subset(subset_index)
-            self.update_hypothesis(true_transmitter, subset_index)
-            self.print_grid(self.grid_priori)
-            print('\n')
-        return plot_data
-
-
     def select_online_greedy_hetero(self, budget, cores, cost_filename):
         '''Heterogeneous version of online greedy selection
         Attributes:
@@ -1195,6 +1150,79 @@ class SelectSensor:
         data = np.array([true_hypotheses, sensor_observe])
         it_tool = InformationTheoryTool(data)
         return it_tool.mutual_information(0, 1)
+
+
+    def accuracy(self, subset_index, true_transmitter):
+        '''Test the accuracy of a subset of sensors when detecting the (single) true transmitter
+        Attributes:
+            subset_index (list):
+            true_transmitter (Transmitter):
+        '''
+        self.subset_index = subset_index
+        self.update_transmitters()
+        true_x, true_y = true_transmitter.x, true_transmitter.y
+        np.random.seed(true_x*self.sen_num + true_y)
+        sensor_list = list(self.sensors)
+        test_num = 1000   # test a thousand times
+        success = 0
+        i = 0
+        while i < test_num:
+            data = []
+            for index in subset_index:
+                sensor = sensor_list[index]
+                sen_x, sen_y = sensor[0], sensor[1]
+                mean, std = self.means_stds.get((true_x, true_y, sen_x, sen_y))
+                data.append(np.random.normal(mean, std))
+            for transmitter in self.transmitters:
+                multivariate_gaussian = transmitter.multivariant_gaussian
+                tran_x, tran_y = transmitter.x, transmitter.y
+                likelihood = multivariate_gaussian.pdf(data)
+                self.grid_posterior[tran_x][tran_y] = likelihood * self.grid_priori[tran_x][tran_y]
+            max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
+            count = len(max_posterior)    # there might be multiple places with the same highest posterior
+            if random.randint(1, count) == 1:
+                success += 1
+            i += 1
+        return float(success)/test_num
+
+
+    def select_online_random(self, budget, cores):
+        '''The online random selection
+        Attributes:
+            budget (int):
+            cores (int):
+        '''
+        random.seed(1)
+        np.random.seed(2)
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        print('true transmitter', true_transmitter)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        plot_data = []
+        subset_to_compute = []
+        cost = 0
+
+        while cost < budget and complement_index:
+            select = random.choice(complement_index)
+            ordered_insert(subset_index, select)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            complement_index.remove(select)
+            cost += 1
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
+
+        return plot_data
+
+
+    def inner_online_random(self, subset_index):
+        '''The inner loop for online random
+        '''
+        accuracy = self.accuracy(subset_index)
+        return (subset_index, accuracy)
 
 
 def new_data():
