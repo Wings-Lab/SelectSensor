@@ -923,11 +923,64 @@ class SelectSensor:
         return plot_data
 
 
+    def select_online_greedy_p(self, budget, cores):
+        '''(Parallel version) of online greedy selection
+        '''
+        plot_data = []
+        random.seed(1)
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        print('true transmitter', true_transmitter)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        self.print_grid(self.grid_priori)
+        number_hypotheses = 10*len(self.transmitters)
+        cost = 0
+
+        while cost < budget and complement_index:
+            true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, candidate, true_hypotheses) for candidate in complement_index)
+
+            best_candidate = candidate_results[0][0]
+            maximum = candidate_results[0][1]
+            for candidate in candidate_results:
+                print(candidate[2], candidate[1])
+                if candidate[1] > maximum:
+                    maximum = candidate[1]
+                    best_candidate = candidate[0]
+
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            plot_data.append(([str(subset_index), len(subset_index), maximum]))
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            self.print_grid(self.grid_priori)
+            cost += 1
+        return plot_data
+
+
+    def inner_online_greedy(self, subset_index, candidate, true_hypotheses):
+        '''The inner loop for online greedy
+        Attributes:
+            subset_index (list):
+            candidate (int):
+            true_hypotheses (list): a list of int
+        Return:
+            (tuple): (index, mutual information, new subset_index) -- (int, float, list)
+        '''
+        np.random.seed(candidate)
+        subset_index2 = copy.deepcopy(subset_index)
+        ordered_insert(subset_index2, candidate)
+        mi = self.mutual_information(subset_index2, true_hypotheses)
+        return (candidate, mi, subset_index2)
+
+
     def select_online_greedy(self, budget):
         '''The online greedy selection
         Attributes:
             budget (int)
         '''
+        plot_data = []
         random.seed(1)
         np.random.seed(2)
         rand = random.randint(0, self.grid_len*self.grid_len-1)
@@ -935,7 +988,6 @@ class SelectSensor:
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        plot_data = []
         self.print_grid(self.grid_priori)
         number_hypotheses = 10*len(self.transmitters)
         cost = 0
@@ -959,7 +1011,6 @@ class SelectSensor:
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
-            print('\n')
         return plot_data
 
 
@@ -998,6 +1049,7 @@ class SelectSensor:
         self.subset_index = subset_index
         self.update_transmitters()
         true_x, true_y = true_transmitter.x, true_transmitter.y
+        np.random.seed(true_x*self.grid_len + true_y)
         data = []                          # the true transmitter generate some data
         sensor_list = list(self.sensors)
         for index in subset_index:
@@ -1038,7 +1090,7 @@ class SelectSensor:
                 hypothesis += 1
         random.shuffle(true_hypotheses)
         size = len(true_hypotheses)
-        if size > number:                 # remove redundant hypotheses
+        if size > number:                 # remove redundant hypotheses till desired amount of hypotheses
             i = 0
             while i < size - number:
                 true_hypotheses.pop()
@@ -1158,7 +1210,7 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    plot_data = selectsensor.select_online_greedy(5)
+    plot_data = selectsensor.select_online_greedy_p(5, 4)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_15.csv')
 
     #figure_1b(selectsensor)
