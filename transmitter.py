@@ -14,6 +14,7 @@ class Transmitter:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.hypothesis = 0
         self.mean_vec = []
         self.mean_vec_sub = []
         self.multivariant_gaussian = None

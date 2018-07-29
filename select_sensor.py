@@ -65,7 +65,9 @@ class SelectSensor:
         '''
         for i in range(self.grid_len):
             for j in range(self.grid_len):
-                self.transmitters.append(Transmitter(i, j))
+                transmitter = Transmitter(i, j)
+                setattr(transmitter, 'hypothesis', i*self.grid_len + j)
+                self.transmitters.append(transmitter)
 
 
     def init_random_sensors(self):
@@ -904,11 +906,11 @@ class SelectSensor:
         cost = 0
 
         while cost < budget and complement_index:
-            maximum = self.mutual_information(subset_index)
+            maximum = self.mutual_information(subset_index, true_transmitter)
             best_candidate = complement_index[0]
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)
-                temp = self.mutual_information(subset_index)
+                temp = self.mutual_information(subset_index, true_transmitter)
                 print(subset_index, 'MI =', temp)
                 if temp > maximum:
                     maximum = temp
@@ -933,23 +935,25 @@ class SelectSensor:
         random.seed(1)
         np.random.seed(2)
         rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         plot_data = []
         self.print_priori()
+        number_hypotheses = 10*len(self.transmitters)
         cost = 0
 
         while cost < budget and complement_index:
-            maximum = self.mutual_information(subset_index)
+            true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
+            maximum = self.mutual_information(subset_index, true_hypotheses)
             best_candidate = complement_index[0]
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)
-                temp = self.mutual_information(subset_index)
-                print(subset_index, 'MI =', temp)
-                if temp > maximum:
-                    maximum = temp
+                mi = self.mutual_information(subset_index, true_hypotheses)
+                print(subset_index, 'MI =', mi)
+                if mi > maximum:
+                    maximum = mi
                     best_candidate = candidate
                 subset_index.remove(candidate)
             ordered_insert(subset_index, best_candidate)
@@ -989,6 +993,7 @@ class SelectSensor:
 
     def update_hypothesis(self, true_transmitter, subset_index):
         '''Use Bayes formula to update P(hypothesis): form prior to posterior
+           After we add a new sensor and get a larger subset, the larger subset begins to observe data from true transmitter
         Attributes:
             true_transmitter (Transmitter)
             subset_index (list)
@@ -1014,55 +1019,70 @@ class SelectSensor:
             print('denominator', denominator)
 
 
-    def mutual_information(self, subset_index):
-        '''Mutual information of a subset of sensors
+    def generate_true_hypotheses(self, number):
+        '''Generate true hypotheses according to self.grid_priori
         Attributes:
-            subset_index (list)
+            number (int): the number of true hypothesis we are generating
+        Return:
+            (list): a list of true hypotheis
+        '''
+        true_hypotheses = []
+        grid = copy.deepcopy(self.grid_priori)
+        grid *= number
+        hypothesis = 0
+        for x in range(self.grid_len):
+            for y in range(self.grid_len):
+                if grid[x][y] > 1e-3:     # if there is less than 0.001 transmitter at the place, then ignore it
+                    repeat = math.ceil(grid[x][y])
+                    i = 0
+                    while i < repeat:
+                        true_hypotheses.append(hypothesis)
+                        i += 1
+                hypothesis += 1
+        random.shuffle(true_hypotheses)
+        size = len(true_hypotheses)
+        if size > number:                 # remove redundant hypotheses
+            i = 0
+            while i < size - number:
+                true_hypotheses.pop()
+                i += 1
+        elif size < number:
+            i = 0
+            while i < number - size:
+                true_hypotheses.append(true_hypotheses[i])
+                i += 1
+        return true_hypotheses
+
+
+    def mutual_information(self, subset_index, true_hypotheses):
+        '''Mutual information between the observation of a subset of sensors and true hypothesis
+        Attributes:
+            subset_index (list): the X_{T,sk} in Algorithm-2,  R2 in the I(R1,R2) formula
+            true_hypotheses (list): the Y in Algorithm-2,      R1 in the I(R1,R2) formula
+        Return:
+            (float) mutual information
         '''
         if not subset_index:
             return 0
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)
-        cache = {}       # cache P(j|i) -- P(R2=r2|R1=r1) -- P(X_T|Hi)
-
-        for transmitter_r2 in self.transmitters:                         # P(R2=r2), the location detected by a subset of sensors
-            j = transmitter_r2.x * self.grid_len + transmitter_r2.y      # 2D location --> 1D index
-            transmitter_r2.set_mean_vec_sub(subset_index)
-            for transmitter_r1 in self.transmitters:                     # P(R1=r1) = P(Hi), the true location of transmitter
-                i = transmitter_r1.x * self.grid_len + transmitter_r1.y  # 2D location --> 1D index
-                if j == i:
-                    continue                                             # deal with j==i until every j!=i is computed
-                transmitter_r1.set_mean_vec_sub(subset_index)
-                pj_pi = np.array(transmitter_r2.mean_vec_sub) - np.array(transmitter_r1.mean_vec_sub)
-                cache[(j, i)] = norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
-
-        size = len(self.transmitters)
-        for i in range(size):                                            # deal with j==i case
-            product = 1
-            for k in range(size):
-                if k != i:
-                    product *= (1-cache.get((k, i)))
-            cache[(i, i)] = product
-            #print((i, i), product)
-
-        # now every P(j|i) is cached, we can finally compute the mutual information now
-        mi = 0                                                           # mutual information
-        for j in range(size):                                            # j is R2=r2
-            prob_r2 = 0
-            for k in range(size):                                        # compute P(R2=r2)
-                x, y = self.index_inverse(k)
-                prob_r2 += (cache.get((j, k)) * self.grid_priori[x][y])
-            for i in range(size):                                        # i is R1=r1
-                x, y = self.index_inverse(i)
-                try:
-                    mi += (cache.get((j, i)) * self.grid_priori[x][y] * math.log2(cache.get((j, i)) / prob_r2))
-                except ValueError as ve:
-                    print(ve)
-                    print((j, i), cache.get((j, i)))
-                    print('prob_r2', prob_r2)
-                    mi += 0
-
-        return mi
+        self.subset_index = subset_index
+        self.update_transmitters()
+        sensor_list = list(self.sensors)
+        sensor_observe = []                  # R2 in the paper
+        for hypothesis in true_hypotheses:   # R1 in the paper
+            true_transmitter = self.transmitters[hypothesis]
+            true_x, true_y = true_transmitter.x, true_transmitter.y
+            data = []                        # data generated from true transmitter
+            for index in subset_index:
+                sensor = sensor_list[index]
+                mean, std = self.means_stds.get((true_x, true_y, sensor[0], sensor[1]))
+                data.append(np.random.normal(mean, std))
+            for trans in self.transmitters:
+                likelihood = trans.multivariant_gaussian.pdf(data)
+                self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
+            r2 = np.argmax(self.grid_posterior)
+            sensor_observe.append(r2)
+        
+        
 
 
 def new_data():
