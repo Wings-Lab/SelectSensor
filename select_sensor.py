@@ -931,7 +931,7 @@ class SelectSensor:
         random.seed(1)
         plot_data = []
         rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[210]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
         energy = pd.read_csv(cost_filename, header=None)
         size = energy[1].count()
