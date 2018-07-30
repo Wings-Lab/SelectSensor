@@ -260,6 +260,7 @@ class SelectSensor:
             (list): results to be plotted. each element is (str, int, float),
                     where str is the list of selected sensors, int is # of sensor, float is O_T
         '''
+        random.seed(0)
         subset_index = []
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
@@ -425,6 +426,7 @@ class SelectSensor:
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+        subset_to_compute = []
         while cost < budget and complement_index:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
 
@@ -439,12 +441,8 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += 1
-
-            plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0]) # don't compute real o_t now, delay to after all the subsets are selected
-
-        subset_to_compute = []
-        for data in plot_data:
-            subset_to_compute.append(data[0])
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            plot_data.append([len(subset_index), maximum, 0]) # don't compute real o_t now, delay to after all the subsets are selected
 
         subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
 
@@ -980,6 +978,7 @@ class SelectSensor:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
         '''
+        self.set_priori()
         plot_data = []
         random.seed(1)
         rand = random.randint(0, self.grid_len*self.grid_len-1)
@@ -1235,6 +1234,7 @@ class SelectSensor:
             budget (int):
             cores (int):
         '''
+        self.set_priori()
         random.seed(1)
         np.random.seed(2)
         rand = random.randint(0, self.grid_len*self.grid_len-1)
@@ -1325,6 +1325,7 @@ class SelectSensor:
             budget (int):
             cores (int):
         '''
+        self.set_priori()
         plot_data = []
         random.seed(1)
         np.random.seed(2)
@@ -1477,7 +1478,7 @@ class SelectSensor:
         plot_data = []
         for i in range(len(subset_results)):
             plot_data.append([subset_to_compute[i], len(subset_to_compute[i]), subset_results[i]])
-        
+
         plots.save_data(plot_data, 'plot_data3/ot_real.csv')
 
 
@@ -1500,17 +1501,17 @@ def new_data():
 def figure_1a(selectsensor):
     '''Y - Probability of error
        X - # of sensor
-       Homogeneous
+       Offline + Homogeneous
        Algorithm - Offline greedy and offline random
     '''
-    plot_data = selectsensor.select_offline_greedy_p(20, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    #plot_data = selectsensor.select_offline_coverage(20, 4)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
 
-    plot_data = selectsensor.select_offline_coverage(30, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
+    #plot_data = selectsensor.select_offline_random(20, 4)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
-    plot_data = selectsensor.select_offline_random(40, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    plot_data = selectsensor.select_offline_greedy_p(20, 4)
+    plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
 
 def figure_1b(selectsensor):
@@ -1532,17 +1533,17 @@ def figure_1b(selectsensor):
 
 def figure_2a(selectsensor):
     '''Y - empirical accuracy
-       X - Number of sensors selected
-       Homogeneous
-       Algorithm - Online greedy
+       X - # of sensors selected
+       Online + Homogeneous
+       Algorithm - Online greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_greedy_p(10, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
-    plot_data = selectsensor.select_offline_coverage(20, 48)
+    plot_data = selectsensor.select_online_nearest(20, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_offline_random(40, 48)
+    plot_data = selectsensor.select_online_random(40, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
 
@@ -1552,14 +1553,14 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
-    selectsensor.ot_approx_real()
-    #selectsensor.read_init_sensor('data/sensor.txt')
-    #selectsensor.read_mean_std('data/mean_std.txt')
-    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    #selectsensor.ot_approx_real()
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    #figure_2a(selectsensor)
+    figure_1a(selectsensor)
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
     #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
