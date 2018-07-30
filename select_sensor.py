@@ -1280,6 +1280,139 @@ class SelectSensor:
         return plot_data
 
 
+    def select_online_nearest(self, budget, cores):
+        '''Online selection using the updated prior information by choosing the 'nearest' sensor
+        Attributes:
+            budget (int):
+            cores (int):
+        '''
+        plot_data = []
+        random.seed(1)
+        np.random.seed(2)
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        print('true transmitter', true_transmitter)
+
+        center = (int(self.grid_len/2), int(self.grid_len/2))
+        min_dis = 99999
+        first_index, i = 0, 0
+        for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            if temp_dis < min_dis:
+                min_dis = temp_dis
+                first_index = i
+            i += 1
+        subset_index = [first_index]
+        accuracy = self.accuracy(subset_index, true_transmitter)
+        plot_data.append([str(subset_index), len(subset_index), accuracy])
+        self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
+        self.print_grid(self.grid_priori)
+        #subset_to_compute = [copy.deepcopy(subset_index)]
+        complement_index = [i for i in range(self.sen_num)]
+        complement_index.remove(first_index)
+        cost = 1
+
+        while cost < budget and complement_index:
+            distances = self.nearest_weighted_distance(complement_index)
+
+            min_distances = np.argwhere(distances == np.amin(distances))  # there could be multiple min distances
+            select = random.choice(min_distances)[0]
+            index_nearest = complement_index[select]
+
+            ordered_insert(subset_index, index_nearest)
+            complement_index.remove(index_nearest)
+            accuracy = self.accuracy(subset_index, true_transmitter)
+            plot_data.append([str(subset_index), len(subset_index), accuracy])
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            self.print_grid(self.grid_priori)
+            cost += 1
+        return plot_data
+
+
+    def nearest_weighted_distance(self, complement_index):
+        '''Compute the weighted distance according to the priori distribution for every sensor in
+           the complement index list and return the all the distances
+        Attributes:
+            complement_index (list)
+        Return:
+            (np.ndarray) - index
+        '''
+        distances = []
+        sensor_list = list(self.sensors)
+        for index in complement_index:
+            sensor = sensor_list[index]
+            weighted_distance = 0
+            for transmitter in self.transmitters:
+                tran_x, tran_y = transmitter.x, transmitter.y
+                weighted_distance += distance.euclidean([sensor[0], sensor[1]], [tran_x, tran_y]) * self.grid_priori[tran_x][tran_y]
+            distances.append(weighted_distance)
+        return np.array(distances)
+
+
+    def select_online_nearest_hetero(self, budget, cores, cost_filename):
+        '''Online selection using the updated prior information by choosing the 'nearest' sensor
+        Attributes:
+            budget (int):
+            cores (int):
+        '''
+        energy = pd.read_csv(cost_filename, header=None)
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+
+        plot_data = []
+        random.seed(1)
+        np.random.seed(2)
+        rand = random.randint(0, self.grid_len*self.grid_len-1)
+        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        print('true transmitter', true_transmitter)
+
+        center = (int(self.grid_len/2), int(self.grid_len/2))
+        min_dis = 99999
+        first_index, i = 0, 0
+        for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            if temp_dis < min_dis:
+                min_dis = temp_dis
+                first_index = i
+            i += 1
+        subset_index = [first_index]
+        accuracy = self.accuracy(subset_index, true_transmitter)
+        plot_data.append([str(subset_index), len(subset_index), accuracy])
+        self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
+        self.print_grid(self.grid_priori)
+        #subset_to_compute = [copy.deepcopy(subset_index)]
+        complement_index = [i for i in range(self.sen_num)]
+        complement_index.remove(first_index)
+        sensor_list = list(self.sensors)
+        cost = 1
+
+        while cost < budget and complement_index:
+            print(cost, budget)
+            distances = self.nearest_weighted_distance(complement_index)
+            min_dist_cost = distances[0] * self.sensors.get(sensor_list[complement_index[0]]).cost
+            best_candidate = complement_index[0]
+            for dist, sen_index in zip(distances, complement_index):
+                sen_cost = self.sensors.get(sensor_list[sen_index]).cost
+                dist_cost = dist * sen_cost
+                if dist_cost < min_dist_cost:
+                    min_dist_cost = dist_cost
+                    best_candidate = sen_index
+
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            accuracy = self.accuracy(subset_index, true_transmitter)
+            plot_data.append([str(subset_index), len(subset_index), accuracy])
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            self.print_grid(self.grid_priori)
+            cost += self.sensors.get(sensor_list[best_candidate]).cost
+        return plot_data
+
+
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -1355,11 +1488,15 @@ def main():
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
-    plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
+    #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
     #plot_data = selectsensor.select_online_random(12, 4)
     #plots.save_data(plot_data, 'plot_data2/Online_Random_15.csv')
     #plot_data = selectsensor.select_online_random_hetero(7, 4, 'data/energy.txt')
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_15_hetero.csv')
+
+    #plot_data = selectsensor.select_online_nearest(6, 4)
+    plot_data = selectsensor.select_online_nearest_hetero(4, 4, 'data/energy.txt')
+
+    plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
 
     #figure_1b(selectsensor)
 
