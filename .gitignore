@@ -7,3 +7,4 @@ artificial_samples.csv
 mean_std.txt
 sensor.txt
 nohup.out
+config.json

@@ -1501,19 +1501,20 @@ def figure_1b(selectsensor):
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
 
 
-def figure_1c(selectsensor):
-    '''Y - Latency
+def figure_2a(selectsensor):
+    '''Y - empirical accuracy
        X - Number of sensors selected
-       Algorithm - Offline greedy
+       Homogeneous
+       Algorithm - Online greedy
     '''
-    plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
-    plots.save_data(plot_data, 'plot_data2/Latency_20.csv')
+    plot_data = selectsensor.select_online_greedy_p(4, 4)
+    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
-    #plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
-    #plots.save_data(plot_data, 'plot_data2/Latency_50.csv')
+    plot_data = selectsensor.select_offline_coverage(10, 4)
+    plots.save_data(plot_data, 'plot_data2/Online_Coverage_30.csv')
 
-    #plot_data = selectsensor.select_offline_greedy_p(20, 4, latency=True)
-    #plots.save_data(plot_data, 'plot_data2/Latency_100.csv')
+    plot_data = selectsensor.select_offline_random(10, 4)
+    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
 
 def main():
@@ -1522,11 +1523,11 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
-    #selectsensor.read_init_sensor('data/sensor.txt')
-    #selectsensor.read_mean_std('data/mean_std.txt')
-    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
     figure_1a(selectsensor)
 
