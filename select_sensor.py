@@ -4,7 +4,6 @@ Select sensor and detect transmitter
 import random
 import math
 import copy
-import time
 import numpy as np
 import pandas as pd
 from scipy.spatial import distance
@@ -70,6 +69,16 @@ class SelectSensor:
                 line = line.split(' ')
                 x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
                 self.sensors[(x, y)] = Sensor(x, y, std, cost)
+
+        with open(hypothesis_file, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split(',')
+                tran_x, tran_y = int(line[0]), int(line[1])
+                sen_x, sen_y = int(line[2]), int(line[3])
+                mean, std = float(line[4]), float(line[5])
+                self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
+
 
 
     def set_priori(self):
@@ -393,7 +402,7 @@ class SelectSensor:
         return 1 - error
 
 
-    def select_offline_greedy_p(self, budget, cores, latency=False):
+    def select_offline_greedy_p(self, budget, cores):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
         Attributes:
             budget (int): budget constraint
@@ -407,7 +416,6 @@ class SelectSensor:
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
-        start = time.time()
         while cost < budget and complement_index:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
 
@@ -422,14 +430,17 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += 1
-            if latency:
-                plot_data.append([str(subset_index), len(subset_index), time.time()-start])  # Y value is latency
-            else:
-                o_t_real = self.o_t(subset_index)
-                plot_data.append([str(subset_index), len(subset_index), o_t_real]) # TODO optimization can be done here. like the hetero version
 
-        self.update_subset(subset_index)
-        self.update_transmitters()
+            plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0]) # don't compute real o_t now, delay to after all the subsets are selected
+
+        subset_to_compute = []
+        for data in plot_data:
+            subset_to_compute.append(data[0])
+
+        subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
+
+        for i in range(len(subset_results)):
+            plot_data[i][2] = subset_results[i]
 
         return plot_data
 
@@ -621,8 +632,8 @@ class SelectSensor:
         for data in second_pass_plot_data:
             second_pass.append(data[0])
 
-        first_pass_o_ts = Parallel(n_jobs=len(first_pass_plot_data))(delayed(self.inner_greedy_hetero)(subset_index) for subset_index in first_pass)
-        second_pass_o_ts = Parallel(n_jobs=len(second_pass_plot_data))(delayed(self.inner_greedy_hetero)(subset_index) for subset_index in second_pass)
+        first_pass_o_ts = Parallel(n_jobs=len(first_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in first_pass)
+        second_pass_o_ts = Parallel(n_jobs=len(second_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in second_pass)
 
         for i in range(len(first_pass_o_ts)):
             first_pass_plot_data[i][2] = first_pass_o_ts[i]
@@ -640,8 +651,8 @@ class SelectSensor:
             return first_pass_plot_data
 
 
-    def inner_greedy_hetero(self, subset_index):
-        '''Compute o_t
+    def inner_greedy_real_ot(self, subset_index):
+        '''Compute the real o_t (accruacy of prediction)
         '''
         o_t = self.o_t(subset_index)
         return o_t
@@ -1454,13 +1465,13 @@ def figure_1a(selectsensor):
        Homogeneous
        Algorithm - Offline greedy and offline random
     '''
-    #plot_data = selectsensor.select_offline_greedy_p(20, 20)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    plot_data = selectsensor.select_offline_greedy_p(4, 4)
+    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
-    #plot_data = selectsensor.select_offline_random(40, 20)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    plot_data = selectsensor.select_offline_random(10, 4)
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
-    plot_data = selectsensor.select_offline_coverage(20, 4)
+    plot_data = selectsensor.select_offline_coverage(10, 4)
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_15.csv')
 
 
@@ -1502,9 +1513,13 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+
+    #selectsensor.read_init_sensor('data/sensor.txt')
+    #selectsensor.read_mean_std('data/mean_std.txt')
+    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+
+    figure_1a(selectsensor)
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
     #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
@@ -1513,9 +1528,9 @@ def main():
     #plot_data = selectsensor.select_online_random_hetero(7, 4, 'data/energy.txt')
 
     #plot_data = selectsensor.select_online_nearest(6, 4)
-    plot_data = selectsensor.select_online_nearest_hetero(4, 4, 'data/energy.txt')
+    #plot_data = selectsensor.select_online_nearest_hetero(4, 4, 'data/energy.txt')
 
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
+    #plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
 
     #figure_1b(selectsensor)
 
