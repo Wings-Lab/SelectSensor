@@ -79,6 +79,15 @@ class SelectSensor:
                 mean, std = float(line[4]), float(line[5])
                 self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
 
+        for transmitter in self.transmitters:
+            tran_x, tran_y = transmitter.x, transmitter.y
+            transmitter.mean_vec = []
+            for sensor in self.sensors:
+                sen_x, sen_y = sensor[0], sensor[1]
+                mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                transmitter.mean_vec.append(mean_std[0])
+            setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
+        print('init done!')
 
 
     def set_priori(self):
