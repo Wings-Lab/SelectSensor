@@ -1007,7 +1007,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
             accuracy = self.accuracy(subset_index, true_transmitter)
-            plot_data.append(([str(subset_index), len(subset_index), accuracy]))  # TODO parallel this
+            plot_data.append(([str(subset_index), len(subset_index), accuracy]))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
