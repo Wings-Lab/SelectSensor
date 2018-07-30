@@ -53,6 +53,25 @@ class SelectSensor:
         self.subset_index = []
 
 
+    def init_from_real_data(self, cov_file, sensor_file, hypothesis_file):
+        '''Init everything from collected real data
+           1. init covariance matrix
+           2. init sensors
+           3. init mean and std between every pair of transmitters and sensors
+        '''
+        cov = pd.read_csv(cov_file, header=None, delimiter=' ')
+        del cov[100]
+        self.covariance = cov.as_matrix()
+
+        self.sensors = {}
+        with open(sensor_file, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.split(' ')
+                x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
+                self.sensors[(x, y)] = Sensor(x, y, std, cost)
+
+
     def set_priori(self):
         '''Set priori distribution - uniform distribution
         '''
