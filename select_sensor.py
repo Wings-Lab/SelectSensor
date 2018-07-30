@@ -1452,6 +1452,35 @@ class SelectSensor:
         return plot_data
 
 
+    def ot_approx_real(self):
+        '''Compare the real ot and the approx ot
+        '''
+        subset_to_compute = []
+        ot_approx = []
+        with open('plot_data3/ot_approx', 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.replace('[', '')
+                line = line.replace(']', ',')
+                line = line.replace('\n', '')
+                line = line.replace(' ', '')
+                line = line.split(',')
+                size = len(line)
+                subset = []
+                for i in range(size-1):
+                    index = int(line[i])
+                    subset.append(index)
+                ot_approx.append(line[size-1])
+                subset_to_compute.append(subset)
+
+        subset_results = Parallel(n_jobs=len(subset_to_compute))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
+        plot_data = []
+        for i in range(len(subset_results)):
+            plot_data.append([subset_to_compute[i], len(subset_to_compute[i]), subset_results[i]])
+        
+        plots.save_data(plot_data, 'plot_data3/ot_real.csv')
+
+
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -1525,11 +1554,12 @@ def main():
 
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
+    selectsensor.ot_approx_real()
     #selectsensor.read_init_sensor('data/sensor.txt')
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_2a(selectsensor)
+    #figure_2a(selectsensor)
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
     #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
