@@ -1507,13 +1507,13 @@ def figure_2a(selectsensor):
        Homogeneous
        Algorithm - Online greedy
     '''
-    plot_data = selectsensor.select_online_greedy_p(4, 4)
+    plot_data = selectsensor.select_online_greedy_p(10, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
-    plot_data = selectsensor.select_offline_coverage(10, 4)
-    plots.save_data(plot_data, 'plot_data2/Online_Coverage_30.csv')
+    plot_data = selectsensor.select_offline_coverage(20, 48)
+    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_offline_random(10, 4)
+    plot_data = selectsensor.select_offline_random(40, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
 
@@ -1523,13 +1523,13 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    #selectsensor.read_init_sensor('data/sensor.txt')
+    #selectsensor.read_mean_std('data/mean_std.txt')
+    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1a(selectsensor)
+    figure_2a(selectsensor)
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
     #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
