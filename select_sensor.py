@@ -421,6 +421,12 @@ class SelectSensor:
             (list): an element is [str, int, float],
                     where str is the list of subset_index, int is # of sensors, float is O_T
         '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
         plot_data = []
 
         cost = 0                                            # |T| in the paper
@@ -505,6 +511,14 @@ class SelectSensor:
             budget (int): budget we have for the heterogeneous sensors
             cores (int): number of cores for parallelization
         '''
+        '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+        '''
         random.seed(0)    # though algorithm is random, the results are the same every time
 
         sensor_list = list(self.sensors)                    # list of sensors' key
@@ -513,6 +527,7 @@ class SelectSensor:
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
         cost = 0
+        cost_list = []
         subset_to_compute = []
         while cost < budget:
             option = []
@@ -527,11 +542,12 @@ class SelectSensor:
             subset_to_compute.append(copy.deepcopy(subset_index))
             sequence.remove(select)
             cost += self.sensors.get(sensor_list[select]).cost
+            cost_list.append(cost)
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
-        for result in subset_results:
-            plot_data.append((str(result[0]), len(result[0]), result[1]))
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
 
         return plot_data
 
@@ -573,7 +589,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            first_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            first_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, maximum, cost)
 
         print('end of the first homo pass and start of the second hetero pass')
@@ -611,7 +627,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            second_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, base_ot, cost)
 
         first_pass = []
@@ -707,14 +723,7 @@ class SelectSensor:
         '''
         random.seed(0)
         sensor_list = list(self.sensors)                    # list of sensors' key
-        '''
-        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-        '''
+
         center = (int(self.grid_len/2), int(self.grid_len/2))
         min_dis = 99999
         first_index, i = 0, 0
@@ -737,6 +746,7 @@ class SelectSensor:
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
         cost = self.sensors.get(sensor_list[first_index]).cost
+        cost_list = [cost]
 
         while cost < budget and complement_index:
             option = []
@@ -768,13 +778,14 @@ class SelectSensor:
             self.add_coverage(coverage, best_sensor[choose], radius)
             subset_to_compute.append(copy.deepcopy(subset_index))
             cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost
+            cost_list.append(cost)
 
         print(len(subset_to_compute), subset_to_compute)
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         plot_data = []
-        for result in subset_results:
-            plot_data.append((str(result[0]), len(result[0]), result[1]))
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
 
         return plot_data
 
@@ -1492,10 +1503,10 @@ def figure_1b(selectsensor):
     plot_data = selectsensor.select_offline_random_hetero(30, 24)
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_coverage_hetero(24, 24)
+    plot_data = selectsensor.select_offline_coverage_hetero(25, 24)
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero(18, 24)
+    plot_data = selectsensor.select_offline_greedy_hetero(20, 24)
     plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
 
@@ -1525,7 +1536,6 @@ def main():
 
     selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     figure_1b(selectsensor)
-
     '''
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
