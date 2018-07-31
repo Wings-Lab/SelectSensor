@@ -989,7 +989,7 @@ class SelectSensor:
         self.print_grid(self.grid_priori)
         number_hypotheses = 10*len(self.transmitters)
         cost = 0
-
+        subset_to_compute = []
         while cost < budget and complement_index:
             true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, true_hypotheses, candidate) \
@@ -1005,12 +1005,17 @@ class SelectSensor:
 
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
-            accuracy = self.accuracy(subset_index, true_transmitter)
-            plot_data.append(([str(subset_index), len(subset_index), accuracy]))
+            subset_to_compute.append(copy.deepcopy(subset_index))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += 1
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
+
         return plot_data
 
 
@@ -1197,6 +1202,7 @@ class SelectSensor:
             subset_index (list):
             true_transmitter (Transmitter):
         '''
+        self.set_priori()
         self.subset_index = subset_index
         self.update_transmitters()
         true_x, true_y = true_transmitter.x, true_transmitter.y
@@ -1253,7 +1259,7 @@ class SelectSensor:
             complement_index.remove(select)
             cost += 1
 
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_random)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
@@ -1261,7 +1267,7 @@ class SelectSensor:
         return plot_data
 
 
-    def inner_online_random(self, true_transmitter, subset_index):
+    def inner_online_accuracy(self, true_transmitter, subset_index):
         '''The inner loop for online random
         '''
         accuracy = self.accuracy(subset_index, true_transmitter)
@@ -1311,7 +1317,7 @@ class SelectSensor:
             cost += self.sensors.get(sensor_list[select]).cost
             cost_list.append(cost)
 
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_random)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
         for cost, result in zip(cost_list, subset_results):
             plot_data.append([str(result[0]), cost, result[1]])
@@ -1343,11 +1349,9 @@ class SelectSensor:
                 first_index = i
             i += 1
         subset_index = [first_index]
-        accuracy = self.accuracy(subset_index, true_transmitter)
-        plot_data.append([str(subset_index), len(subset_index), accuracy])
         self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
         self.print_grid(self.grid_priori)
-        #subset_to_compute = [copy.deepcopy(subset_index)]
+        subset_to_compute = [copy.deepcopy(subset_index)]
         complement_index = [i for i in range(self.sen_num)]
         complement_index.remove(first_index)
         cost = 1
@@ -1361,12 +1365,19 @@ class SelectSensor:
 
             ordered_insert(subset_index, index_nearest)
             complement_index.remove(index_nearest)
-            accuracy = self.accuracy(subset_index, true_transmitter)
-            plot_data.append([str(subset_index), len(subset_index), accuracy])
+            #accuracy = self.accuracy(subset_index, true_transmitter)
+            #plot_data.append([str(subset_index), len(subset_index), accuracy])
+            subset_to_compute.append(copy.deepcopy(subset_index))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += 1
+        
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
+
         return plot_data
 
 
@@ -1537,14 +1548,14 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - Online greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_greedy_p(10, 48)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
+    plot_data = selectsensor.select_online_random(25, 48)
+    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
-    plot_data = selectsensor.select_online_nearest(20, 48)
+    plot_data = selectsensor.select_online_nearest(15, 48)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_online_random(40, 48)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
+    plot_data = selectsensor.select_online_greedy_p(10, 48)
+    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
 
 def main():
@@ -1561,7 +1572,7 @@ def main():
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1a(selectsensor)
+    figure_2a(selectsensor)
 
     #plot_data = selectsensor.select_online_greedy_p(5, 4)
     #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
