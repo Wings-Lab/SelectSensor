@@ -1487,7 +1487,7 @@ def figure_1a(selectsensor):
     '''Y - Probability of error
        X - # of sensor
        Offline + Homogeneous
-       Algorithm - Offline greedy, coverage, and random
+       Algorithm - greedy, coverage, and random
     '''
     plot_data = selectsensor.select_offline_coverage(30, 20)
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
@@ -1503,7 +1503,7 @@ def figure_1b(selectsensor):
     '''Y - Probability of error
        X - Total budget
        Offline + Heterogeneous
-       Algorithm - Offline greedy, coverage, and random
+       Algorithm - greedy, coverage, and random
     '''
 
     plot_data = selectsensor.select_offline_random_hetero(30, 24)
@@ -1520,7 +1520,7 @@ def figure_2a(selectsensor):
     '''Y - empirical accuracy
        X - # of sensors selected
        Online + Homogeneous
-       Algorithm - Online greedy + nearest + random
+       Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_random(25, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
