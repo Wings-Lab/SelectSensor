@@ -1506,14 +1506,14 @@ def figure_1b(selectsensor):
        Algorithm - greedy, coverage, and random
     '''
 
-    plot_data = selectsensor.select_offline_random_hetero(30, 24)
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
+    plot_data = selectsensor.select_offline_random_hetero(30, 20)
+    plots.save_data(plot_data, 'plot_data30/Offline_Random_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_coverage_hetero(25, 24)
-    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
+    plot_data = selectsensor.select_offline_coverage_hetero(25, 20)
+    plots.save_data(plot_data, 'plot_data30/Offline_Coverage_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero(20, 24)
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
+    plot_data = selectsensor.select_offline_greedy_hetero(17, 20)
+    plots.save_data(plot_data, 'plot_data30/Offline_Greedy_30_hetero.csv')
 
 
 def figure_2a(selectsensor):
@@ -1565,7 +1565,7 @@ def main():
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_2b(selectsensor)
+    figure_1b(selectsensor)
 
 if __name__ == '__main__':
     #new_data()
