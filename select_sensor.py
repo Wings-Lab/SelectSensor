@@ -970,7 +970,7 @@ class SelectSensor:
         return plot_data
 
 
-    def select_online_greedy_p(self, budget, cores):
+    def select_online_greedy_p(self, budget, cores, true_index):
         '''(Parallel version) of online greedy selection
         Attributes:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
@@ -979,8 +979,7 @@ class SelectSensor:
         self.set_priori()
         plot_data = []
         random.seed(1)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand*rand%(self.grid_len*self.grid_len)] # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
@@ -1232,7 +1231,7 @@ class SelectSensor:
         return float(success)/test_num
 
 
-    def select_online_random(self, budget, cores):
+    def select_online_random(self, budget, cores, true_index):
         '''The online random selection
         Attributes:
             budget (int):
@@ -1241,8 +1240,7 @@ class SelectSensor:
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
@@ -1323,7 +1321,7 @@ class SelectSensor:
         return plot_data
 
 
-    def select_online_nearest(self, budget, cores):
+    def select_online_nearest(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Attributes:
             budget (int):
@@ -1333,8 +1331,7 @@ class SelectSensor:
         plot_data = []
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
@@ -1515,13 +1512,13 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - Online greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random(25, 48)
+    plot_data = selectsensor.select_online_random(25, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
-    plot_data = selectsensor.select_online_nearest(20, 48)
+    plot_data = selectsensor.select_online_nearest(20, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(8, 48)
+    plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
 
