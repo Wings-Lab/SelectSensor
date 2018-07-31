@@ -684,7 +684,7 @@ class SelectSensor:
         complement_index.remove(first_index)
 
         radius = self.compute_coverage_radius(first_sensor, subset_index) # compute the radius
-
+        print('radius', radius)
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
         cost = 1
@@ -816,7 +816,7 @@ class SelectSensor:
             product = 1
             for prob in prob_i:
                 product *= prob
-            if product > 0.0000001:     # set threshold
+            if product > 0.00001:     # set threshold
                 radius = i
             else:
                 break
@@ -1011,6 +1011,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
             subset_to_compute.append(copy.deepcopy(subset_index))
+            print('MI = ', maximum)
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
@@ -1096,12 +1097,13 @@ class SelectSensor:
         '''Print priori or posterior grid
         '''
         size = len(grid)
-        print('\n')
+        print('')
         for i in range(size):
             print('[', end=' ')
             for j in range(size):
                 print('%.5f' % grid[i][j], end=' ')
             print(']')
+        print('')
 
 
     def update_hypothesis(self, true_transmitter, subset_index):
@@ -1246,8 +1248,8 @@ class SelectSensor:
             cores (int):
         '''
         self.set_priori()
-        random.seed(1)
-        np.random.seed(2)
+        random.seed(5)
+        np.random.seed(5)
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
@@ -1345,6 +1347,7 @@ class SelectSensor:
             i += 1
         subset_index = [first_index]
         self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
+        self.print_subset(subset_index)
         self.print_grid(self.grid_priori)
         subset_to_compute = [copy.deepcopy(subset_index)]
         complement_index = [i for i in range(self.sen_num)]
@@ -1489,14 +1492,14 @@ def figure_1a(selectsensor):
        Offline + Homogeneous
        Algorithm - greedy, coverage, and random
     '''
-    plot_data = selectsensor.select_offline_coverage(45, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
+    plot_data = selectsensor.select_offline_coverage(45, 48)
+    plots.save_data(plot_data, 'plot_data30/Offline_Coverage_30.csv')
 
-    plot_data = selectsensor.select_offline_random(55, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    #plot_data = selectsensor.select_offline_random(55, 20)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
-    plot_data = selectsensor.select_offline_greedy_p(35, 20)
-    plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(35, 20)
+    #plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
 
 def figure_1b(selectsensor):
@@ -1523,7 +1526,7 @@ def figure_2a(selectsensor):
        Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_nearest(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Nearest_30.csv')
 
     plot_data = selectsensor.select_online_random(25, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
@@ -1539,13 +1542,13 @@ def figure_2b(selectsensor):
        Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_random_hetero(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Random_30_hetero.csv')
 
     plot_data = selectsensor.select_online_nearest_hetero(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Nearest_30_hetero.csv')
 
     plot_data = selectsensor.select_online_greedy_hetero(8, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Greedy_30_hetero.csv')
 
 
 def main():
@@ -1554,9 +1557,10 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    figure_2a(selectsensor)
 
-    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #figure_1b(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #figure_1b(selectsensor)
@@ -1565,7 +1569,7 @@ def main():
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1b(selectsensor)
+
 
 if __name__ == '__main__':
     #new_data()
