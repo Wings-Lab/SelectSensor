@@ -927,13 +927,6 @@ class SelectSensor:
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
-        energy = pd.read_csv('data/energy.txt', header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-
         number_hypotheses = 10*len(self.transmitters)
         sensor_list = list(self.sensors)
         subset_index = []
@@ -1292,13 +1285,6 @@ class SelectSensor:
             cores (int):
             cost_filename (str):
         '''
-        energy = pd.read_csv('data/energy.txt', header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-
         random.seed(1)
         np.random.seed(2)
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
@@ -1415,13 +1401,14 @@ class SelectSensor:
             cores (int):
         '''
         self.set_priori()
+        '''
         energy = pd.read_csv('data/energy.txt', header=None)
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
-
+        '''
         plot_data = []
         random.seed(1)
         np.random.seed(2)
@@ -1549,16 +1536,16 @@ def figure_2b(selectsensor):
     '''Y - empirical accuracy
        X - # of sensors selected
        Online + Heterogeneous
-       Algorithm - Online greedy + nearest + random
+       Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_random_hetero(25, 24, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_15_hetero.csv')
+    plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
 
     plot_data = selectsensor.select_online_nearest_hetero(20, 24, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
+    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30_hetero.csv')
 
     plot_data = selectsensor.select_online_greedy_hetero(8, 24, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_15_hetero.csv')
+    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30_hetero.csv')
 
 
 def main():
