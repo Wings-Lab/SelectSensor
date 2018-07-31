@@ -1557,7 +1557,7 @@ def figure_2b(selectsensor):
     plot_data = selectsensor.select_online_nearest_hetero(20, 24, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
 
-    plot_data = selectsensor.select_online_greedy_hetero(10, 24, 769)
+    plot_data = selectsensor.select_online_greedy_hetero(8, 24, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_15_hetero.csv')
 
 
