@@ -1,6 +1,4 @@
-'''
-Select sensor and detect transmitter
-'''
+
 import random
 import math
 import copy
@@ -20,6 +18,7 @@ import plots
 
 class SelectSensor:
     '''Near-optimal low-cost sensor selection
+       Select sensor and detect transmitter
 
     Attributes:
         config (json):       configurations - settings and parameters
@@ -1246,8 +1245,8 @@ class SelectSensor:
             cores (int):
         '''
         self.set_priori()
-        random.seed(1)
-        np.random.seed(2)
+        random.seed(5)
+        np.random.seed(5)
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
@@ -1523,13 +1522,13 @@ def figure_2a(selectsensor):
        Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_random(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Random_30.csv')
 
-    plot_data = selectsensor.select_online_nearest(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
+    #plot_data = selectsensor.select_online_nearest(20, 48, 769)
+    #plots.save_data(plot_data, 'plot_data30/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
+    #plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
+    #plots.save_data(plot_data, 'plot_data30/Online_Greedy_30.csv')
 
 
 def figure_2b(selectsensor):
@@ -1539,13 +1538,13 @@ def figure_2b(selectsensor):
        Algorithm - greedy + nearest + random
     '''
     plot_data = selectsensor.select_online_random_hetero(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Random_30_hetero.csv')
 
     plot_data = selectsensor.select_online_nearest_hetero(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Nearest_30_hetero.csv')
 
     plot_data = selectsensor.select_online_greedy_hetero(8, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30_hetero.csv')
+    plots.save_data(plot_data, 'plot_data30/Online_Greedy_30_hetero.csv')
 
 
 def main():
@@ -1565,7 +1564,7 @@ def main():
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1a(selectsensor)
+    figure_2a(selectsensor)
 
 if __name__ == '__main__':
     #new_data()
