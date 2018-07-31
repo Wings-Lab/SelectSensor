@@ -421,6 +421,12 @@ class SelectSensor:
             (list): an element is [str, int, float],
                     where str is the list of subset_index, int is # of sensors, float is O_T
         '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
         plot_data = []
 
         cost = 0                                            # |T| in the paper
@@ -498,22 +504,22 @@ class SelectSensor:
         return plot_data
 
 
-    def select_offline_random_hetero(self, budget, cores, cost_filename):
+    def select_offline_random_hetero(self, budget, cores):
         '''Offline selection when the sensors are heterogeneous
 
         Attributes:
             budget (int): budget we have for the heterogeneous sensors
             cores (int): number of cores for parallelization
-            cost_filename (str): file that has the cost of sensors
         '''
-        random.seed(0)    # though algorithm is random, the results are the same every time
-
-        energy = pd.read_csv(cost_filename, header=None)
+        '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
+        '''
+        random.seed(0)    # though algorithm is random, the results are the same every time
 
         sensor_list = list(self.sensors)                    # list of sensors' key
         self.subset = {}
@@ -521,33 +527,32 @@ class SelectSensor:
         plot_data = []
         sequence = [i for i in range(self.sen_num)]
         cost = 0
+        cost_list = []
         subset_to_compute = []
-        for budget_i in range(1, budget): # TODO need to change this, the x-label can be decimal
-            while cost < budget_i:
-                option = []
-                for index in sequence:
-                    temp_cost = self.sensors.get(sensor_list[index]).cost
-                    if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
-                        option.append(index)
-                if not option:                      # if there are no sensors that can be selected, then break
-                    break
-                select = random.choice(option)
-                ordered_insert(subset_index, select)
-                subset_to_compute.append(copy.deepcopy(subset_index))
-                sequence.remove(select)
-                cost += self.sensors.get(sensor_list[select]).cost
+        while cost < budget:
+            option = []
+            for index in sequence:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(index)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+            select = random.choice(option)
+            ordered_insert(subset_index, select)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            sequence.remove(select)
+            cost += self.sensors.get(sensor_list[select]).cost
+            cost_list.append(cost)
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
-        for result in subset_results:
-            plot_data.append((str(result[0]), len(result[0]), result[1]))
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
 
-        #self.update_subset(subset_index)
-        #self.update_transmitters()
         return plot_data
 
 
-    def select_offline_greedy_hetero(self, budget, cores, cost_filename):
+    def select_offline_greedy_hetero(self, budget, cores):
         '''Offline selection when the sensors are heterogeneous
            Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
 
@@ -556,13 +561,6 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
-        energy = pd.read_csv(cost_filename, header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
@@ -591,7 +589,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            first_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            first_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, maximum, cost)
 
         print('end of the first homo pass and start of the second hetero pass')
@@ -620,7 +618,7 @@ class SelectSensor:
                 incre = candidate[1] - base_ot
                 cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
                 incre_cost = incre/cost_of_candiate     # increment of O_T devided by cost
-                print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
+                #print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
                 if incre_cost > maximum:
                     best_candidate = candidate[0]
                     maximum = incre_cost
@@ -629,7 +627,7 @@ class SelectSensor:
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            second_pass_plot_data.append([copy.deepcopy(subset_index), len(subset_index), 0])           # Y value is real o_t
+            second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, base_ot, cost)
 
         first_pass = []
@@ -720,17 +718,11 @@ class SelectSensor:
         return plot_data
 
 
-    def select_offline_coverage_hetero(self, budget, cores, cost_filename):
+    def select_offline_coverage_hetero(self, budget, cores):
         '''A coverage-based baseline algorithm (heterogeneous version)
         '''
         random.seed(0)
         sensor_list = list(self.sensors)                    # list of sensors' key
-        energy = pd.read_csv(cost_filename, header=None)  # load the energy cost
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
         min_dis = 99999
@@ -754,12 +746,21 @@ class SelectSensor:
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
         cost = self.sensors.get(sensor_list[first_index]).cost
+        cost_list = [cost]
 
         while cost < budget and complement_index:
+            option = []
+            for index in complement_index:
+                temp_cost = self.sensors.get(sensor_list[index]).cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(index)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+
             min_overlap_cost = 99999   # to minimize overlap*cost
             best_candidate = []
             best_sensor = []
-            for candidate in complement_index:
+            for candidate in option:
                 sensor = self.index_to_sensor(candidate)
                 overlap = self.compute_overlap(coverage, sensor, radius)
                 temp_cost = self.sensors.get(sensor_list[candidate]).cost
@@ -776,14 +777,15 @@ class SelectSensor:
             complement_index.remove(best_candidate[choose])
             self.add_coverage(coverage, best_sensor[choose], radius)
             subset_to_compute.append(copy.deepcopy(subset_index))
-            cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost  # TODO fix bug here
+            cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost
+            cost_list.append(cost)
 
         print(len(subset_to_compute), subset_to_compute)
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
 
         plot_data = []
-        for result in subset_results:
-            plot_data.append((str(result[0]), len(result[0]), result[1]))
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
 
         return plot_data
 
@@ -912,30 +914,26 @@ class SelectSensor:
         return (x, y)
 
 
-    def select_online_greedy_hetero(self, budget, cores, cost_filename):
+    def select_online_greedy_hetero(self, budget, cores, true_index):
         '''Heterogeneous version of online greedy selection
         Attributes:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
             cost_filename (str): file that has the cost of sensors
         '''
+        self.set_priori()
         random.seed(1)
         plot_data = []
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
-        energy = pd.read_csv(cost_filename, header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
+
         number_hypotheses = 10*len(self.transmitters)
         sensor_list = list(self.sensors)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
+        subset_to_compute = []
         cost = 0
-
+        cost_list = []
         while cost < budget and complement_index:
             print(cost, budget)
             option = []
@@ -967,12 +965,20 @@ class SelectSensor:
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-            accuracy = self.accuracy(subset_index, true_transmitter)
-            plot_data.append([str(subset_index), len(subset_index), accuracy])  # TODO parallel upgrade here
+            cost_list.append(cost)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+
+        print(len(subset_to_compute), subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+
+        plot_data = []
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
+
         return plot_data
 
 
-    def select_online_greedy_p(self, budget, cores):
+    def select_online_greedy_p(self, budget, cores, true_index):
         '''(Parallel version) of online greedy selection
         Attributes:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
@@ -981,8 +987,7 @@ class SelectSensor:
         self.set_priori()
         plot_data = []
         random.seed(1)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
@@ -1036,7 +1041,7 @@ class SelectSensor:
 
 
     def select_online_greedy(self, budget):
-        '''The online greedy selection
+        '''The online greedy selection. Homogeneous.
         Attributes:
             budget (int)
         '''
@@ -1234,7 +1239,7 @@ class SelectSensor:
         return float(success)/test_num
 
 
-    def select_online_random(self, budget, cores):
+    def select_online_random(self, budget, cores, true_index):
         '''The online random selection
         Attributes:
             budget (int):
@@ -1243,8 +1248,7 @@ class SelectSensor:
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
@@ -1260,7 +1264,7 @@ class SelectSensor:
             cost += 1
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
-
+        print(subset_results)
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
@@ -1274,24 +1278,16 @@ class SelectSensor:
         return (subset_index, accuracy)
 
 
-    def select_online_random_hetero(self, budget, cores, cost_filename):
+    def select_online_random_hetero(self, budget, cores, true_index):
         '''The online random selection. heterogeneous version
         Attributes:
             budget (int):
             cores (int):
             cost_filename (str):
         '''
-        energy = pd.read_csv(cost_filename, header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
         sensor_list = list(self.sensors)                    # list of sensors' key
@@ -1325,7 +1321,7 @@ class SelectSensor:
         return plot_data
 
 
-    def select_online_nearest(self, budget, cores):
+    def select_online_nearest(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Attributes:
             budget (int):
@@ -1335,8 +1331,7 @@ class SelectSensor:
         plot_data = []
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
@@ -1365,16 +1360,14 @@ class SelectSensor:
 
             ordered_insert(subset_index, index_nearest)
             complement_index.remove(index_nearest)
-            #accuracy = self.accuracy(subset_index, true_transmitter)
-            #plot_data.append([str(subset_index), len(subset_index), accuracy])
             subset_to_compute.append(copy.deepcopy(subset_index))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += 1
-        
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        print(subset_results)
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
@@ -1401,24 +1394,25 @@ class SelectSensor:
         return np.array(distances)
 
 
-    def select_online_nearest_hetero(self, budget, cores, cost_filename):
+    def select_online_nearest_hetero(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Attributes:
             budget (int):
             cores (int):
         '''
-        energy = pd.read_csv(cost_filename, header=None)
+        self.set_priori()
+        '''
+        energy = pd.read_csv('data/energy.txt', header=None)
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
-
+        '''
         plot_data = []
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
@@ -1431,15 +1425,16 @@ class SelectSensor:
                 first_index = i
             i += 1
         subset_index = [first_index]
-        accuracy = self.accuracy(subset_index, true_transmitter)
-        plot_data.append([str(subset_index), len(subset_index), accuracy])
+
         self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
         self.print_grid(self.grid_priori)
-        #subset_to_compute = [copy.deepcopy(subset_index)]
+
         complement_index = [i for i in range(self.sen_num)]
         complement_index.remove(first_index)
         sensor_list = list(self.sensors)
-        cost = 1
+        cost = self.sensors.get(sensor_list[first_index]).cost
+        subset_to_compute = [copy.deepcopy(subset_index)]
+        cost_list = [cost]
 
         while cost < budget and complement_index:
             print(cost, budget)
@@ -1455,42 +1450,21 @@ class SelectSensor:
 
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
-            accuracy = self.accuracy(subset_index, true_transmitter)
-            plot_data.append([str(subset_index), len(subset_index), accuracy])
+            subset_to_compute.append(copy.deepcopy(subset_index))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += self.sensors.get(sensor_list[best_candidate]).cost
-        return plot_data
+            cost_list.append(cost)
 
+        print(len(subset_to_compute), subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
-    def ot_approx_real(self):
-        '''Compare the real ot and the approx ot
-        '''
-        subset_to_compute = []
-        ot_approx = []
-        with open('plot_data3/ot_approx', 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                line = line.replace('[', '')
-                line = line.replace(']', ',')
-                line = line.replace('\n', '')
-                line = line.replace(' ', '')
-                line = line.split(',')
-                size = len(line)
-                subset = []
-                for i in range(size-1):
-                    index = int(line[i])
-                    subset.append(index)
-                ot_approx.append(line[size-1])
-                subset_to_compute.append(subset)
-
-        subset_results = Parallel(n_jobs=len(subset_to_compute))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
         plot_data = []
-        for i in range(len(subset_results)):
-            plot_data.append([subset_to_compute[i], len(subset_to_compute[i]), subset_results[i]])
+        for cost, result in zip(cost_list, subset_results):
+            plot_data.append((str(result[0]), cost, result[1]))
 
-        plots.save_data(plot_data, 'plot_data3/ot_real.csv')
+        return plot_data
 
 
 def new_data():
@@ -1513,7 +1487,7 @@ def figure_1a(selectsensor):
     '''Y - Probability of error
        X - # of sensor
        Offline + Homogeneous
-       Algorithm - Offline greedy and offline random
+       Algorithm - greedy, coverage, and random
     '''
     plot_data = selectsensor.select_offline_coverage(45, 20)
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
@@ -1528,34 +1502,50 @@ def figure_1a(selectsensor):
 def figure_1b(selectsensor):
     '''Y - Probability of error
        X - Total budget
-       Heterogeneous
-       Algorithm - Offline greedy and offline random
+       Offline + Heterogeneous
+       Algorithm - greedy, coverage, and random
     '''
 
-    plot_data = selectsensor.select_offline_random_hetero(15, 40, 'data/energy.txt')
+    plot_data = selectsensor.select_offline_random_hetero(30, 24)
     plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
-    #plot_data = selectsensor.select_offline_greedy_hetero(15, 40, 'data/energy.txt')
-    #plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
-
-    plot_data = selectsensor.select_offline_coverage_hetero(15, 40, 'data/energy.txt')
+    plot_data = selectsensor.select_offline_coverage_hetero(25, 24)
     plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
+
+    plot_data = selectsensor.select_offline_greedy_hetero(20, 24)
+    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
 
 def figure_2a(selectsensor):
     '''Y - empirical accuracy
        X - # of sensors selected
        Online + Homogeneous
-       Algorithm - Online greedy + nearest + random
+       Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random(25, 48)
+    plot_data = selectsensor.select_online_random(25, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
-    plot_data = selectsensor.select_online_nearest(15, 48)
+    plot_data = selectsensor.select_online_nearest(20, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(10, 48)
+    plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
+
+
+def figure_2b(selectsensor):
+    '''Y - empirical accuracy
+       X - # of sensors selected
+       Online + Heterogeneous
+       Algorithm - greedy + nearest + random
+    '''
+    plot_data = selectsensor.select_online_random_hetero(25, 24, 769)
+    plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
+
+    plot_data = selectsensor.select_online_nearest_hetero(20, 24, 769)
+    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30_hetero.csv')
+
+    plot_data = selectsensor.select_online_greedy_hetero(8, 24, 769)
+    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30_hetero.csv')
 
 
 def main():
@@ -1564,42 +1554,18 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
-    
-    #selectsensor.ot_approx_real()
+    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    #figure_1b(selectsensor)
+    #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    #figure_1b(selectsensor)
+
     #selectsensor.read_init_sensor('data/sensor.txt')
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1a(selectsensor)
-
-    #plot_data = selectsensor.select_online_greedy_p(5, 4)
-    #plot_data = selectsensor.select_online_greedy_hetero(4, 4, 'data/energy.txt')
-    #plot_data = selectsensor.select_online_random(12, 4)
-    #plots.save_data(plot_data, 'plot_data2/Online_Random_15.csv')
-    #plot_data = selectsensor.select_online_random_hetero(7, 4, 'data/energy.txt')
-
-    #plot_data = selectsensor.select_online_nearest(6, 4)
-    #plot_data = selectsensor.select_online_nearest_hetero(4, 4, 'data/energy.txt')
-
-    #plots.save_data(plot_data, 'plot_data2/Online_Nearest_15_hetero.csv')
-
-    #figure_1b(selectsensor)
-
-    #plot_data = selectsensor.select_offline_greedy(10)
-    #plots.save_data(plot_data, 'plot_data2/test_of_approx.csv')
-    #figure_1b(selectsensor)
-
-    #selectsensor.no_selection()
-
-    #plot_data = selectsensor.select_offline_greedy_p(20, 4)
-
-    #plot_data = selectsensor.select_offline_random(20)
-    #plot_data = selectsensor.select_offline_greedy_p(20, 40)
-
-    #print('error ', selectsensor.test_error())
-
+    figure_2b(selectsensor)
 
 if __name__ == '__main__':
     #new_data()
