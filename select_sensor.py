@@ -684,7 +684,7 @@ class SelectSensor:
         complement_index.remove(first_index)
 
         radius = self.compute_coverage_radius(first_sensor, subset_index) # compute the radius
-
+        print('radius', radius)
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
         cost = 1
@@ -820,7 +820,7 @@ class SelectSensor:
                 radius = i
             else:
                 break
-        return radius
+        return 3
 
 
     def compute_overlap(self, coverage, sensor, radius):
@@ -1489,14 +1489,14 @@ def figure_1a(selectsensor):
        Offline + Homogeneous
        Algorithm - greedy, coverage, and random
     '''
-    plot_data = selectsensor.select_offline_coverage(45, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30.csv')
+    plot_data = selectsensor.select_offline_coverage(45, 48)
+    plots.save_data(plot_data, 'plot_data30/Offline_Coverage_30.csv')
 
-    plot_data = selectsensor.select_offline_random(55, 20)
-    plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    #plot_data = selectsensor.select_offline_random(55, 20)
+    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
 
-    plot_data = selectsensor.select_offline_greedy_p(35, 20)
-    plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    #plot_data = selectsensor.select_offline_greedy_p(35, 20)
+    #plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
 
 
 def figure_1b(selectsensor):
@@ -1565,7 +1565,7 @@ def main():
     #selectsensor.read_mean_std('data/mean_std.txt')
     #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_2b(selectsensor)
+    figure_1a(selectsensor)
 
 if __name__ == '__main__':
     #new_data()
