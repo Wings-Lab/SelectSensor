@@ -1270,7 +1270,7 @@ class SelectSensor:
             cores (int):
             cost_filename (str):
         '''
-        energy = pd.read_csv(cost_filename, header=None)
+        energy = pd.read_csv('data/energy.txt', header=None)
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
@@ -1387,13 +1387,13 @@ class SelectSensor:
         return np.array(distances)
 
 
-    def select_online_nearest_hetero(self, budget, cores, cost_filename):
+    def select_online_nearest_hetero(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Attributes:
             budget (int):
             cores (int):
         '''
-        energy = pd.read_csv(cost_filename, header=None)
+        energy = pd.read_csv('data/energy.txt', header=None)
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
@@ -1403,8 +1403,7 @@ class SelectSensor:
         plot_data = []
         random.seed(1)
         np.random.seed(2)
-        rand = random.randint(0, self.grid_len*self.grid_len-1)
-        true_transmitter = self.transmitters[rand]         # in online selection, there is one true transmitter somewhere
+        true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
@@ -1515,6 +1514,22 @@ def figure_2a(selectsensor):
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
 
 
+def figure_2b(selectsensor):
+    '''Y - empirical accuracy
+       X - # of sensors selected
+       Online + Heterogeneous
+       Algorithm - Online greedy + nearest + random
+    '''
+    #plot_data = selectsensor.select_online_random_hetero(15, 4, 34)
+    #plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
+
+    plot_data = selectsensor.select_online_nearest_hetero(15, 4, 34)
+    plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
+
+    #plot_data = selectsensor.select_online_greedy__hetero(5, 4, 34)
+    #plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
+
+
 def main():
     '''main
     '''
@@ -1523,16 +1538,14 @@ def main():
 
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
 
-    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
-    figure_1b(selectsensor)
+    #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    #figure_1b(selectsensor)
 
-    '''
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
-    figure_1b(selectsensor)
-    '''
+    figure_2b(selectsensor)
 
 if __name__ == '__main__':
     #new_data()
