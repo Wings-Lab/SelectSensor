@@ -816,11 +816,11 @@ class SelectSensor:
             product = 1
             for prob in prob_i:
                 product *= prob
-            if product > 0.0001:     # set threshold
+            if product > 0.0000001:     # set threshold
                 radius = i
             else:
                 break
-        return radius
+        return 3
 
 
     def compute_overlap(self, coverage, sensor, radius):
@@ -1522,11 +1522,11 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
-
     plot_data = selectsensor.select_online_nearest(20, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30.csv')
+
+    plot_data = selectsensor.select_online_random(25, 48, 769)
+    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
 
     plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
