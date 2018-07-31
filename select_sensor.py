@@ -1097,12 +1097,13 @@ class SelectSensor:
         '''Print priori or posterior grid
         '''
         size = len(grid)
-        print('\n')
+        print('')
         for i in range(size):
             print('[', end=' ')
             for j in range(size):
                 print('%.5f' % grid[i][j], end=' ')
             print(']')
+        print('')
 
 
     def update_hypothesis(self, true_transmitter, subset_index):
@@ -1346,6 +1347,7 @@ class SelectSensor:
             i += 1
         subset_index = [first_index]
         self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
+        self.print_subset(subset_index)
         self.print_grid(self.grid_priori)
         subset_to_compute = [copy.deepcopy(subset_index)]
         complement_index = [i for i in range(self.sen_num)]
