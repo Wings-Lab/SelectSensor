@@ -545,13 +545,6 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
-        energy = pd.read_csv('data/energy.txt', header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-
         sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
@@ -1496,14 +1489,14 @@ def figure_1b(selectsensor):
        Algorithm - Offline greedy, coverage, and random
     '''
 
-    #plot_data = selectsensor.select_offline_random_hetero(20, 4)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
+    plot_data = selectsensor.select_offline_random_hetero(30, 24)
+    plots.save_data(plot_data, 'plot_data2/Offline_Random_30_hetero.csv')
 
-    #plot_data = selectsensor.select_offline_coverage_hetero(15, 4)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Coverage_15_hetero.csv')
+    plot_data = selectsensor.select_offline_coverage_hetero(24, 24)
+    plots.save_data(plot_data, 'plot_data2/Offline_Coverage_30_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero(5, 4)
-    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_15_hetero.csv')
+    plot_data = selectsensor.select_offline_greedy_hetero(18, 24)
+    plots.save_data(plot_data, 'plot_data2/Offline_Greedy_30_hetero.csv')
 
 
 def figure_2a(selectsensor):
@@ -1528,8 +1521,11 @@ def main():
 
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    figure_2a(selectsensor)
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+
+    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    figure_1b(selectsensor)
+
     '''
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
