@@ -1538,13 +1538,13 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random_hetero(25, 24, 769)
+    plot_data = selectsensor.select_online_random_hetero(25, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Random_30_hetero.csv')
 
-    plot_data = selectsensor.select_online_nearest_hetero(20, 24, 769)
+    plot_data = selectsensor.select_online_nearest_hetero(20, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Nearest_30_hetero.csv')
 
-    plot_data = selectsensor.select_online_greedy_hetero(8, 24, 769)
+    plot_data = selectsensor.select_online_greedy_hetero(8, 48, 769)
     plots.save_data(plot_data, 'plot_data2/Online_Greedy_30_hetero.csv')
 
 
