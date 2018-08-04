@@ -175,8 +175,8 @@ def process_iq(filename, NFFT):
 import random as rand
 
 def compute_cov(df):
-    length = 30
-    number_of_sensors = 100
+    length = 30 #length and width of grid
+    number_of_sensors = 100 #change this to add or reduce sensors
     print(df['stdvalues'])
     cov = np.zeros((number_of_sensors, number_of_sensors))
     cov_file = open('cov', 'w')
@@ -300,12 +300,13 @@ def plot_histogram(filename):
     NFFT = 512
     utils = Utilities()
     datatype = scipy.uint8
-    block_length = NFFT * 300
     # block_offset = NFFT*i #<---change to random offsets between 0 to (max_no_of_iq_samples - block_length)
     sample_rate = 1e6
     fc = 916e6
     utils = Utilities()
     datatype = scipy.uint8
+
+
     block_length = NFFT * 100
     # block_offset = NFFT*i #<---change to random offsets between 0 to (max_no_of_iq_samples - block_length)
     sample_rate = 1e6
@@ -328,10 +329,10 @@ def plot_histogram(filename):
 
 import glob
 
-for filename in glob.iglob('*.iq'):
-    plot_histogram(filename)
+#for filename in glob.iglob('*.iq'):
+#    plot_histogram(filename)
 
-#generate_hypothesis_data()
+generate_hypothesis_data()
 
 
 
