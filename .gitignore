@@ -8,3 +8,5 @@ mean_std.txt
 sensor.txt
 nohup.out
 config.json
+iq-files/*.iq
+iq-files/*.png
