@@ -59,7 +59,7 @@ class SelectSensor:
            3. init mean and std between every pair of transmitters and sensors
         '''
         cov = pd.read_csv(cov_file, header=None, delimiter=' ')
-        del cov[100]
+        del cov[len(cov)]
         self.covariance = cov.as_matrix()
 
         self.sensors = {}
@@ -73,7 +73,7 @@ class SelectSensor:
         with open(hypothesis_file, 'r') as f:
             lines = f.readlines()
             for line in lines:
-                line = line.split(',')
+                line = line.split(' ')
                 tran_x, tran_y = int(line[0]), int(line[1])
                 sen_x, sen_y = int(line[2]), int(line[3])
                 mean, std = float(line[4]), float(line[5])
@@ -816,11 +816,12 @@ class SelectSensor:
             product = 1
             for prob in prob_i:
                 product *= prob
+            print(i, product)
             if product > 0.00001:     # set threshold
                 radius = i
             else:
                 break
-        return 3
+        return radius
 
 
     def compute_overlap(self, coverage, sensor, radius):
@@ -1492,14 +1493,14 @@ def figure_1a(selectsensor):
        Offline + Homogeneous
        Algorithm - greedy, coverage, and random
     '''
-    plot_data = selectsensor.select_offline_coverage(45, 48)
-    plots.save_data(plot_data, 'plot_data30/Offline_Coverage_30.csv')
+    plot_data = selectsensor.select_offline_coverage(20, 48)
+    plots.save_data(plot_data, 'plot_data20/Offline_Coverage.csv')
 
-    #plot_data = selectsensor.select_offline_random(55, 20)
-    #plots.save_data(plot_data, 'plot_data2/Offline_Random_30.csv')
+    plot_data = selectsensor.select_offline_random(20, 48)
+    plots.save_data(plot_data, 'plot_data20/Offline_Random.csv')
 
-    #plot_data = selectsensor.select_offline_greedy_p(35, 20)
-    #plots.save_data_offline_greedy(plot_data, 'plot_data2/Offline_Greedy_30.csv')
+    plot_data = selectsensor.select_offline_greedy_p(20, 48)
+    plots.save_data_offline_greedy(plot_data, 'plot_data20/Offline_Greedy.csv')
 
 
 def figure_1b(selectsensor):
@@ -1558,7 +1559,7 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    figure_2a(selectsensor)
+    figure_1a(selectsensor)
 
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #figure_1b(selectsensor)
