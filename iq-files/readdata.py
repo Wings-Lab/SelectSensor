@@ -205,7 +205,7 @@ def generate_hypothesis_data():
     mean_var_arrays = {}
     var_var_arrays = {}
     start_logNFFT = 8
-    end_logNFFT = 8     # control homo or hetero
+    end_logNFFT = 14 #change start and end_logNFFT to same value for homogeneous sensors
     models = {}
     predictions= {}
     delmean = {}
