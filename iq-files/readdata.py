@@ -205,7 +205,7 @@ def generate_hypothesis_data():
     mean_var_arrays = {}
     var_var_arrays = {}
     start_logNFFT = 8
-    end_logNFFT = 14 #change start and end_logNFFT to same value for homogeneous sensors
+    end_logNFFT = 8 #change start and end_logNFFT to same value for homogeneous sensors
     models = {}
     predictions= {}
     delmean = {}
@@ -258,7 +258,7 @@ def generate_hypothesis_data():
     print('check point 4\n', sensor_configs)
     print('check point 5\n', delmean)
     file_handle = open('hypothesis', 'w')
-    distance_unit = 5.5 #increase this to make the means larger; affects very quickly
+    distance_unit = 5.1 #increase this to make the means larger; affects very quickly
     for trans_i in range(0, length):
         for trans_j in range(0, length):
             for sensorNum in range(len(sensor_locations)):
