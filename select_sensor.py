@@ -1526,14 +1526,14 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_nearest(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data30/Online_Nearest_30.csv')
+    plot_data = selectsensor.select_online_nearest(10, 48, 0)
+    plots.save_data(plot_data, 'plot_data20/Online_Nearest.csv')
 
-    plot_data = selectsensor.select_online_random(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Random_30.csv')
+    plot_data = selectsensor.select_online_random(20, 48, 0)
+    plots.save_data(plot_data, 'plot_data20/Online_Random.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(8, 48, 769)
-    plots.save_data(plot_data, 'plot_data2/Online_Greedy_30.csv')
+    plot_data = selectsensor.select_online_greedy_p(6, 48, 0)
+    plots.save_data(plot_data, 'plot_data20/Online_Greedy.csv')
 
 
 def figure_2b(selectsensor):
@@ -1559,8 +1559,8 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    figure_1a(selectsensor)
-
+    #figure_1a(selectsensor)
+    figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #figure_1b(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
