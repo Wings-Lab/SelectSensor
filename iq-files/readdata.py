@@ -258,7 +258,7 @@ def generate_hypothesis_data():
     print('check point 4\n', sensor_configs)
     print('check point 5\n', delmean)
     file_handle = open('hypothesis', 'w')
-    distance_unit = 4.5 #increase this to make the means larger; affects very quickly
+    distance_unit = 4 #increase this to make the means larger; affects very quickly
     for trans_i in range(0, length):
         for trans_j in range(0, length):
             for sensorNum in range(len(sensor_locations)):
