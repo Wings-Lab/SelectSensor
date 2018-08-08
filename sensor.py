@@ -26,6 +26,12 @@ class Sensor:
         return  "(%d, %d, %f, %d)" % (self.x, self.y, self.gain, self.index)
 
 
+    def output(self):
+        '''Output into files
+        '''
+        return "%d %d %f\n" % (self.x, self.y, self.std)
+
+
     def __lt__(self, other):
         '''Override the less than method and turn it into 'more than'
         '''

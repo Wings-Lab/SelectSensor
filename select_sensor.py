@@ -42,7 +42,7 @@ class SelectSensor:
         self.grid_priori = np.zeros(0)
         self.grid_posterior = np.zeros(0)
         self.transmitters = []
-        self.sensors = {}
+        self.sensors = []
         self.data = np.zeros(0)
         self.covariance = []
         self.init_transmitters()
@@ -62,7 +62,7 @@ class SelectSensor:
         del cov[len(cov)]
         self.covariance = cov.as_matrix()
 
-        self.sensors = {}
+        self.sensors = []
         init_f = 1 - 0.5*len(self.transmitters)
         with open(sensor_file, 'r') as f:
             index = 0
@@ -70,7 +70,7 @@ class SelectSensor:
             for line in lines:
                 line = line.split(' ')
                 x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
-                self.sensors[(x, y)] = Sensor(x, y, std, cost, pre_f=init_f, index=index)
+                self.sensors.append(Sensor(x, y, std, cost, pre_f=init_f, index=index))
                 index += 1
 
         with open(hypothesis_file, 'r') as f:
@@ -86,7 +86,7 @@ class SelectSensor:
             tran_x, tran_y = transmitter.x, transmitter.y
             transmitter.mean_vec = []
             for sensor in self.sensors:
-                sen_x, sen_y = sensor[0], sensor[1]
+                sen_x, sen_y = sensor.x, sensor.y
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                 transmitter.mean_vec.append(mean_std[0])
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
@@ -119,19 +119,28 @@ class SelectSensor:
         while i < self.sen_num:
             x = random.randint(0, self.grid_len-1) # randomly find a place for a sensor
             y = random.randint(0, self.grid_len-1)
-            if self.sensors.get((x, y)): # a sensor exists at (x, y)
+            if self.exist_sensor(x, y):  # a sensor exists at (x, y)
                 continue
             else:                        # no sensor exists at (x,y)
-                self.sensors[(x, y)] = Sensor(x, y, random.uniform(noise_l, noise_h))  # the noise is here
+                self.sensors.append(Sensor(x, y, random.uniform(noise_l, noise_h)))  # the noise is here
                 i += 1
+
+
+    def exist_sensor(self, x, y):
+        '''Test whether a sensor exists at (x, y)
+        '''
+        for sensor in self.sensors:
+            if sensor.x == x and sensor.y == y:
+                return True
+        return False
 
 
     def save_sensor(self, filename):
         '''Save location of sensors
         '''
         with open(filename, 'w') as f:
-            for key in self.sensors:
-                f.write(self.sensors[key].output())
+            for sensor in self.sensors:
+                f.write(sensor.output())
 
 
     def read_init_sensor(self, filename):
@@ -139,7 +148,7 @@ class SelectSensor:
         Attributes:
             filename (str)
         '''
-        self.sensors = {}
+        self.sensors = []
         init_f = 1 - 0.5*len(self.transmitters)
         with open(filename, 'r') as f:
             index = 0
@@ -147,7 +156,7 @@ class SelectSensor:
             for line in lines:
                 line = line.split(' ')
                 x, y, std = int(line[0]), int(line[1]), float(line[2])
-                self.sensors[(x, y)] = Sensor(x, y, std, pre_f=init_f, index=index)
+                self.sensors.append(Sensor(x, y, std, pre_f=init_f, index=index))
                 index += 1
 
 
@@ -160,8 +169,8 @@ class SelectSensor:
         with open(filename, 'w') as f:
             for transmitter in self.transmitters:
                 tran_x, tran_y = transmitter.x, transmitter.y
-                for key in self.sensors:
-                    sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
+                for sensor in self.sensors:
+                    sen_x, sen_y, std = sensor.x, sensor.y, sensor.std
                     dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                     dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
                     mean = 100 - 33*math.log(2*dist)
@@ -198,7 +207,7 @@ class SelectSensor:
         while i < 5000:                  # sample 5000 times for a single transmitter
             one_transmitter = []
             for sensor in self.sensors:  # for each transmitter, send signal to all sensors
-                sen_x, sen_y = sensor[0], sensor[1]
+                sen_x, sen_y = sensor.x, sensor.y
                 mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                 one_transmitter.append(np.random.normal(mean, std))
             data.append(one_transmitter)
@@ -223,7 +232,7 @@ class SelectSensor:
             tran_x, tran_y = transmitter.x, transmitter.y
             transmitter.mean_vec = []
             for sensor in self.sensors:
-                sen_x, sen_y = sensor[0], sensor[1]
+                sen_x, sen_y = sensor.x, sensor.y
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                 transmitter.mean_vec.append(mean_std[0])
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
@@ -240,10 +249,10 @@ class SelectSensor:
         Attributes:
             subset_index (list): a list of sensor indexes. guarantee sorted
         '''
+        self.subset = []
         self.subset_index = subset_index
-        sensor_list = list(self.sensors)           # list of sensors' key
         for index in self.subset_index:
-            self.subset[sensor_list[index]] = self.sensors.get(sensor_list[index])
+            self.subset.append(self.sensors[index])
 
 
     def update_transmitters(self):
@@ -426,7 +435,7 @@ class SelectSensor:
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            setattr(sensor, 'cost', energy[1][i%size])
             i += 1
         plot_data = []
         cost = 0                                            # |T| in the paper
@@ -471,7 +480,7 @@ class SelectSensor:
         size = energy[1].count()
         i = 0
         for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            setattr(sensor, 'cost', energy[1][i%size])
             i += 1
         plot_data = []
         cost = 0                                            # |T| in the paper
@@ -568,7 +577,6 @@ class SelectSensor:
         '''
         random.seed(0)    # though algorithm is random, the results are the same every time
 
-        sensor_list = list(self.sensors)                    # list of sensors' key
         self.subset = {}
         subset_index = []
         plot_data = []
@@ -579,7 +587,7 @@ class SelectSensor:
         while cost < budget:
             option = []
             for index in sequence:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
                     option.append(index)
             if not option:                      # if there are no sensors that can be selected, then break
@@ -588,7 +596,7 @@ class SelectSensor:
             ordered_insert(subset_index, select)
             subset_to_compute.append(copy.deepcopy(subset_index))
             sequence.remove(select)
-            cost += self.sensors.get(sensor_list[select]).cost
+            cost += self.sensors[select].cost
             cost_list.append(cost)
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_random)(subset_index) for subset_index in subset_to_compute)
@@ -608,7 +616,6 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
-        sensor_list = list(self.sensors)                    # list of sensors' key
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -617,7 +624,7 @@ class SelectSensor:
         while cost < budget and complement_index:
             option = []
             for index in complement_index:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
                     option.append(index)
             if not option:                      # if there are no sensors that can be selected, then break
@@ -635,7 +642,7 @@ class SelectSensor:
 
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += self.sensors[best_candidate].cost
             first_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, maximum, cost)
 
@@ -649,7 +656,7 @@ class SelectSensor:
         while cost < budget and complement_index:
             option = []
             for index in complement_index:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
                     option.append(index)
             if not option:
@@ -658,12 +665,12 @@ class SelectSensor:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in option)
 
             best_candidate = candidate_results[0][0]                       # an element of candidate_results is a tuple - (int, float, list)
-            cost_of_candiate = self.sensors.get(sensor_list[best_candidate]).cost
+            cost_of_candiate = self.sensors[best_candidate].cost
             new_base_ot = candidate_results[0][1]
             maximum = (candidate_results[0][1]-base_ot)/cost_of_candiate   # where int is the candidate, float is the O_T, list is the subset_list with new candidate
             for candidate in candidate_results:
                 incre = candidate[1] - base_ot
-                cost_of_candiate = self.sensors.get(sensor_list[candidate[0]]).cost
+                cost_of_candiate = self.sensors[candidate[0]].cost
                 incre_cost = incre/cost_of_candiate     # increment of O_T devided by cost
                 #print(candidate[2], candidate[1], incre, cost_of_candiate, incre_cost)
                 if incre_cost > maximum:
@@ -673,7 +680,7 @@ class SelectSensor:
             base_ot = new_base_ot
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             complement_index.remove(best_candidate)
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += self.sensors[best_candidate].cost
             second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, base_ot, cost)
 
@@ -719,7 +726,7 @@ class SelectSensor:
         first_index, i = 0, 0
         first_sensor = None
         for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
-            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor.x, sensor.y])
             if temp_dis < min_dis:
                 min_dis = temp_dis
                 first_index = i
@@ -769,14 +776,13 @@ class SelectSensor:
         '''A coverage-based baseline algorithm (heterogeneous version)
         '''
         random.seed(0)
-        sensor_list = list(self.sensors)                    # list of sensors' key
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
         min_dis = 99999
         first_index, i = 0, 0
         first_sensor = None
         for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
-            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor.x, sensor.y])
             if temp_dis < min_dis:
                 min_dis = temp_dis
                 first_index = i
@@ -792,13 +798,13 @@ class SelectSensor:
 
         coverage = np.zeros((self.grid_len, self.grid_len), dtype=int)
         self.add_coverage(coverage, first_sensor, radius)
-        cost = self.sensors.get(sensor_list[first_index]).cost
+        cost = self.sensors[first_index].cost
         cost_list = [cost]
 
         while cost < budget and complement_index:
             option = []
             for index in complement_index:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
                     option.append(index)
             if not option:                      # if there are no sensors that can be selected, then break
@@ -810,7 +816,7 @@ class SelectSensor:
             for candidate in option:
                 sensor = self.index_to_sensor(candidate)
                 overlap = self.compute_overlap(coverage, sensor, radius)
-                temp_cost = self.sensors.get(sensor_list[candidate]).cost
+                temp_cost = self.sensors[candidate].cost
                 overlap_cost = (overlap+0.001)*temp_cost
                 if overlap_cost < min_overlap_cost:
                     min_overlap_cost = overlap_cost
@@ -824,7 +830,7 @@ class SelectSensor:
             complement_index.remove(best_candidate[choose])
             self.add_coverage(coverage, best_sensor[choose], radius)
             subset_to_compute.append(copy.deepcopy(subset_index))
-            cost += self.sensors.get(sensor_list[best_candidate[choose]]).cost
+            cost += self.sensors[best_candidate[choose]].cost
             cost_list.append(cost)
 
         print(len(subset_to_compute), subset_to_compute)
@@ -847,7 +853,7 @@ class SelectSensor:
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
         radius = 1
         for i in range(1, int(self.grid_len/2)):    # compute 'radius'
-            transmitter_i = self.transmitters[(first_sensor[0] - i)*self.grid_len + first_sensor[1]] # 2D index --> 1D index
+            transmitter_i = self.transmitters[(first_sensor.x - i)*self.grid_len + first_sensor.y] # 2D index --> 1D index
             i_x, i_y = transmitter_i.x, transmitter_i.y
             if i_x < 0:
                 break
@@ -873,16 +879,20 @@ class SelectSensor:
 
     def compute_overlap(self, coverage, sensor, radius):
         '''Compute the overlap between selected sensors and the new sensor
+        Attributes:
+            coverage (2D array)
+            sensor (Sensor)
+            radius (int)
         '''
-        x_low = sensor[0] - radius if sensor[0] - radius >= 0 else 0
-        x_high = sensor[0] + radius if sensor[0] + radius <= self.grid_len-1 else self.grid_len-1
-        y_low = sensor[1] - radius if sensor[1] - radius >= 0 else 0
-        y_high = sensor[1] + radius if sensor[1] + radius <= self.grid_len-1 else self.grid_len-1
+        x_low = sensor.x - radius if sensor.x - radius >= 0 else 0
+        x_high = sensor.x + radius if sensor.x + radius <= self.grid_len-1 else self.grid_len-1
+        y_low = sensor.y - radius if sensor.y - radius >= 0 else 0
+        y_high = sensor.y + radius if sensor.y + radius <= self.grid_len-1 else self.grid_len-1
 
         overlap = 0
         for x in range(x_low, x_high+1):
             for y in range(y_low, y_high):
-                if distance.euclidean([x, y], [sensor[0], sensor[1]]) <= radius:
+                if distance.euclidean([x, y], [sensor.x, sensor.y]) <= radius:
                     overlap += coverage[x][y]
         return overlap
 
@@ -901,17 +911,17 @@ class SelectSensor:
         '''When seleted a sensor, add coverage by 1
         Attributes:
             coverage (2D array): each element is a counter for coverage
-            sensor (tuple): (x, y)
+            sensor (Sensor): (x, y)
             radius (int): radius of a sensor
         '''
-        x_low = sensor[0] - radius if sensor[0] - radius >= 0 else 0
-        x_high = sensor[0] + radius if sensor[0] + radius <= self.grid_len-1 else self.grid_len-1
-        y_low = sensor[1] - radius if sensor[1] - radius >= 0 else 0
-        y_high = sensor[1] + radius if sensor[1] + radius <= self.grid_len-1 else self.grid_len-1
+        x_low = sensor.x - radius if sensor.x - radius >= 0 else 0
+        x_high = sensor.x + radius if sensor.x + radius <= self.grid_len-1 else self.grid_len-1
+        y_low = sensor.y - radius if sensor.y - radius >= 0 else 0
+        y_high = sensor.y + radius if sensor.y + radius <= self.grid_len-1 else self.grid_len-1
 
         for x in range(x_low, x_high+1):
             for y in range(y_low, y_high+1):
-                if distance.euclidean([x, y], [sensor[0], sensor[1]]) <= radius:
+                if distance.euclidean([x, y], [sensor.x, sensor.y]) <= radius:
                     coverage[x][y] += 1
 
 
@@ -931,7 +941,7 @@ class SelectSensor:
             while i < 10:  # test 10 times for each transmitter
                 data = []
                 for sensor in self.subset:
-                    sen_x, sen_y = sensor[0], sensor[1]
+                    sen_x, sen_y = sensor.x, sensor.y
                     mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                     data.append(np.random.normal(mean, std))
                 for transmitter2 in self.transmitters:  # given hypothesis, the probability of data
@@ -976,7 +986,6 @@ class SelectSensor:
         print('true transmitter', true_transmitter)
 
         number_hypotheses = 10*len(self.transmitters)
-        sensor_list = list(self.sensors)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         subset_to_compute = []
@@ -986,7 +995,7 @@ class SelectSensor:
             print(cost, budget)
             option = []
             for index in complement_index:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:
                     option.append(index)
             if not option:
@@ -997,11 +1006,11 @@ class SelectSensor:
                                 for candidate in option)
 
             best_candidate = candidate_results[0][0]
-            cost_of_candidate = self.sensors.get(sensor_list[best_candidate]).cost
+            cost_of_candidate = self.sensors[best_candidate].cost
             maximum = candidate_results[0][1]/cost_of_candidate
             for candidate in candidate_results:
                 mi_incre = candidate[1]
-                cost_of_candidate = self.sensors.get(sensor_list[candidate[0]]).cost
+                cost_of_candidate = self.sensors[candidate[0]].cost
                 mi_incre_cost = mi_incre/cost_of_candidate
                 print(candidate[0], mi_incre, cost_of_candidate, mi_incre_cost)
                 if mi_incre_cost > maximum:
@@ -1012,7 +1021,7 @@ class SelectSensor:
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += self.sensors[best_candidate].cost
             cost_list.append(cost)
             subset_to_compute.append(copy.deepcopy(subset_index))
 
@@ -1134,10 +1143,9 @@ class SelectSensor:
             subset_index (list)
         '''
         print(subset_index, end=' ')
-        subset_list = list(self.sensors)
         print('[', end=' ')
         for index in subset_index:
-            print(subset_list[index], end=' ')
+            print(self.sensors[index].x, self.sensors[index].y, end=' ')
         print(']')
 
 
@@ -1166,10 +1174,9 @@ class SelectSensor:
         true_x, true_y = true_transmitter.x, true_transmitter.y
         np.random.seed(true_x*self.grid_len + true_y)
         data = []                          # the true transmitter generate some data
-        sensor_list = list(self.sensors)
         for index in subset_index:
-            sensor = sensor_list[index]
-            mean, std = self.means_stds.get((true_x, true_y, sensor[0], sensor[1]))
+            sensor = self.sensors[index]
+            mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
             data.append(np.random.normal(mean, std))
         for trans in self.transmitters:
             likelihood = trans.multivariant_gaussian.pdf(data)
@@ -1230,15 +1237,14 @@ class SelectSensor:
             return 0
         self.subset_index = subset_index
         self.update_transmitters()
-        sensor_list = list(self.sensors)
         sensor_observe = []                  # R2 in the paper
         for hypothesis in true_hypotheses:   # R1 in the paper
             true_transmitter = self.transmitters[hypothesis]
             true_x, true_y = true_transmitter.x, true_transmitter.y
             data = []                        # data generated from true transmitter
             for index in subset_index:
-                sensor = sensor_list[index]
-                mean, std = self.means_stds.get((true_x, true_y, sensor[0], sensor[1]))
+                sensor = self.sensors[index]
+                mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
                 data.append(np.random.normal(mean, std))
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
@@ -1262,16 +1268,14 @@ class SelectSensor:
         self.update_transmitters()
         true_x, true_y = true_transmitter.x, true_transmitter.y
         np.random.seed(true_x*self.sen_num + true_y)
-        sensor_list = list(self.sensors)
         test_num = 1000   # test a thousand times
         success = 0
         i = 0
         while i < test_num:
             data = []
             for index in subset_index:
-                sensor = sensor_list[index]
-                sen_x, sen_y = sensor[0], sensor[1]
-                mean, std = self.means_stds.get((true_x, true_y, sen_x, sen_y))
+                sensor = self.sensors[index]
+                mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
                 data.append(np.random.normal(mean, std))
             for transmitter in self.transmitters:
                 multivariate_gaussian = transmitter.multivariant_gaussian
@@ -1340,7 +1344,6 @@ class SelectSensor:
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
-        sensor_list = list(self.sensors)                    # list of sensors' key
         complement_index = [i for i in range(self.sen_num)]
         plot_data = []
         subset_to_compute = []
@@ -1351,7 +1354,7 @@ class SelectSensor:
             print(cost, budget)
             option = []
             for index in complement_index:
-                temp_cost = self.sensors.get(sensor_list[index]).cost
+                temp_cost = self.sensors[index].cost
                 if cost + temp_cost <= budget:
                     option.append(index)
             if not option:
@@ -1360,7 +1363,7 @@ class SelectSensor:
             ordered_insert(subset_index, select)
             subset_to_compute.append(copy.deepcopy(subset_index))
             complement_index.remove(select)
-            cost += self.sensors.get(sensor_list[select]).cost
+            cost += self.sensors[select].cost
             cost_list.append(cost)
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
@@ -1388,7 +1391,7 @@ class SelectSensor:
         min_dis = 99999
         first_index, i = 0, 0
         for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
-            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor.x, sensor.y])
             if temp_dis < min_dis:
                 min_dis = temp_dis
                 first_index = i
@@ -1434,13 +1437,12 @@ class SelectSensor:
             (np.ndarray) - index
         '''
         distances = []
-        sensor_list = list(self.sensors)
         for index in complement_index:
-            sensor = sensor_list[index]
+            sensor = self.sensors[index]
             weighted_distance = 0
             for transmitter in self.transmitters:
                 tran_x, tran_y = transmitter.x, transmitter.y
-                weighted_distance += distance.euclidean([sensor[0], sensor[1]], [tran_x, tran_y]) * self.grid_priori[tran_x][tran_y]
+                weighted_distance += distance.euclidean([sensor.x, sensor.y], [tran_x, tran_y]) * self.grid_priori[tran_x][tran_y]
             distances.append(weighted_distance)
         return np.array(distances)
 
@@ -1470,7 +1472,7 @@ class SelectSensor:
         min_dis = 99999
         first_index, i = 0, 0
         for sensor in self.sensors:        # select the first sensor that is closest to the center of the grid
-            temp_dis = distance.euclidean([center[0], center[1]], [sensor[0], sensor[1]])
+            temp_dis = distance.euclidean([center[0], center[1]], [sensor.x, sensor.y])
             if temp_dis < min_dis:
                 min_dis = temp_dis
                 first_index = i
@@ -1482,18 +1484,17 @@ class SelectSensor:
 
         complement_index = [i for i in range(self.sen_num)]
         complement_index.remove(first_index)
-        sensor_list = list(self.sensors)
-        cost = self.sensors.get(sensor_list[first_index]).cost
+        cost = self.sensors[first_index].cost
         subset_to_compute = [copy.deepcopy(subset_index)]
         cost_list = [cost]
 
         while cost < budget and complement_index:
             print(cost, budget)
             distances = self.nearest_weighted_distance(complement_index)
-            min_dist_cost = distances[0] * self.sensors.get(sensor_list[complement_index[0]]).cost
+            min_dist_cost = distances[0] * self.sensors[complement_index[0]].cost
             best_candidate = complement_index[0]
             for dist, sen_index in zip(distances, complement_index):
-                sen_cost = self.sensors.get(sensor_list[sen_index]).cost
+                sen_cost = self.sensors[sen_index].cost
                 dist_cost = dist * sen_cost
                 if dist_cost < min_dist_cost:
                     min_dist_cost = dist_cost
@@ -1505,7 +1506,7 @@ class SelectSensor:
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
-            cost += self.sensors.get(sensor_list[best_candidate]).cost
+            cost += self.sensors[best_candidate].cost
             cost_list.append(cost)
 
         print(len(subset_to_compute), subset_to_compute)
