@@ -158,7 +158,8 @@ class SelectSensor:
                     sen_x, sen_y, std = self.sensors[key].x, self.sensors[key].y, self.sensors[key].std
                     dist = distance.euclidean([sen_x, sen_y], [tran_x, tran_y])
                     dist = 0.5 if dist < 1e-2 else dist  # in case distance is zero
-                    mean = 100 - 22.2*math.log(2*dist)
+                    mean = 100 - 33*math.log(2*dist)
+                    mean = 0 if mean < 0 else mean
                     f.write("%d %d %d %d %f %f\n" % (tran_x, tran_y, sen_x, sen_y, mean, std))
 
 
@@ -188,7 +189,7 @@ class SelectSensor:
         tran_x, tran_y = transmitter.x, transmitter.y
         data = []
         i = 0
-        while i < 1000:                  # sample 1000 times for a single transmitter
+        while i < 5000:                  # sample 5000 times for a single transmitter
             one_transmitter = []
             for sensor in self.sensors:  # for each transmitter, send signal to all sensors
                 sen_x, sen_y = sensor[0], sensor[1]
@@ -387,29 +388,23 @@ class SelectSensor:
         '''
         if not subset_index:  # empty sequence are false
             return -99999999999.
-        prob_error = []
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+        prob_error = 0                              # around 3% speed up by replacing [] to float
 
         for transmitter_i in self.transmitters:
             i_x, i_y = transmitter_i.x, transmitter_i.y
             transmitter_i.set_mean_vec_sub(subset_index)
-            prob_i = []
+            prob_i = 0
             for transmitter_j in self.transmitters:
                 j_x, j_y = transmitter_j.x, transmitter_j.y
                 if i_x == j_x and i_y == j_y:
                     continue
                 transmitter_j.set_mean_vec_sub(subset_index)
                 pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
-                prob_i.append(norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
-            summation = 0
-            for i in prob_i:
-                summation += i
-            prob_error.append(summation * self.grid_priori[i_x][i_y])
-        error = 0
-        for i in prob_error:
-            error += i
-        return 1 - error
+                prob_i += norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+            prob_error += prob_i * self.grid_priori[i_x][i_y]
+        return 1 - prob_error
 
 
     def select_offline_greedy_p(self, budget, cores):
@@ -428,7 +423,8 @@ class SelectSensor:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
         plot_data = []
-
+        base_ot = 1 - 0.5*len(self.transmitters)
+        # a heap here
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -817,7 +813,7 @@ class SelectSensor:
             for prob in prob_i:
                 product *= prob
             print(i, product)
-            if product > 0.0001:     # set threshold
+            if product > 0.01:     # set threshold
                 radius = i
             else:
                 break
@@ -1487,89 +1483,24 @@ def new_data():
     selectsensor.generate_data('data/artificial_samples.csv')
 
 
-def figure_1a(selectsensor):
-    '''Y - Probability of error
-       X - # of sensor
-       Offline + Homogeneous
-       Algorithm - greedy, coverage, and random
-    '''
-    plot_data = selectsensor.select_offline_coverage(20, 48)
-    plots.save_data(plot_data, 'plot_data20/Offline_Coverage.csv')
-
-    plot_data = selectsensor.select_offline_random(20, 48)
-    plots.save_data(plot_data, 'plot_data20/Offline_Random.csv')
-
-    plot_data = selectsensor.select_offline_greedy_p(10, 48)
-    plots.save_data_offline_greedy(plot_data, 'plot_data20/Offline_Greedy.csv')
-
-
-def figure_1b(selectsensor):
-    '''Y - Probability of error
-       X - Total budget
-       Offline + Heterogeneous
-       Algorithm - greedy, coverage, and random
-    '''
-
-    plot_data = selectsensor.select_offline_random_hetero(30, 20)
-    plots.save_data(plot_data, 'plot_data30/Offline_Random_30_hetero.csv')
-
-    plot_data = selectsensor.select_offline_coverage_hetero(25, 20)
-    plots.save_data(plot_data, 'plot_data30/Offline_Coverage_30_hetero.csv')
-
-    plot_data = selectsensor.select_offline_greedy_hetero(17, 20)
-    plots.save_data(plot_data, 'plot_data30/Offline_Greedy_30_hetero.csv')
-
-
-def figure_2a(selectsensor):
-    '''Y - empirical accuracy
-       X - # of sensors selected
-       Online + Homogeneous
-       Algorithm - greedy + nearest + random
-    '''
-    plot_data = selectsensor.select_online_nearest(10, 48, 0)
-    plots.save_data(plot_data, 'plot_data20/Online_Nearest.csv')
-
-    plot_data = selectsensor.select_online_random(20, 48, 0)
-    plots.save_data(plot_data, 'plot_data20/Online_Random.csv')
-
-    plot_data = selectsensor.select_online_greedy_p(6, 48, 0)
-    plots.save_data(plot_data, 'plot_data20/Online_Greedy.csv')
-
-
-def figure_2b(selectsensor):
-    '''Y - empirical accuracy
-       X - # of sensors selected
-       Online + Heterogeneous
-       Algorithm - greedy + nearest + random
-    '''
-    plot_data = selectsensor.select_online_random_hetero(25, 48, 769)
-    plots.save_data(plot_data, 'plot_data30/Online_Random_30_hetero.csv')
-
-    plot_data = selectsensor.select_online_nearest_hetero(20, 48, 769)
-    plots.save_data(plot_data, 'plot_data30/Online_Nearest_30_hetero.csv')
-
-    plot_data = selectsensor.select_online_greedy_hetero(8, 48, 769)
-    plots.save_data(plot_data, 'plot_data30/Online_Greedy_30_hetero.csv')
-
-
 def main():
     '''main
     '''
-
     selectsensor = SelectSensor('config.json')
 
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    #figure_1a(selectsensor)
-    figure_2a(selectsensor)
+    #real data
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
-    #figure_1b(selectsensor)
-    #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
-    #figure_1b(selectsensor)
+    #plots.figure_1b(selectsensor)
 
-    #selectsensor.read_init_sensor('data/sensor.txt')
-    #selectsensor.read_mean_std('data/mean_std.txt')
-    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-
+    #fake data
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    plots.figure_1a(selectsensor)
+    #plot_data = selectsensor.select_offline_greedy_p(10, 4)
+    #plots.save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
 
 
 if __name__ == '__main__':
