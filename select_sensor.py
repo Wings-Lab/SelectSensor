@@ -63,12 +63,15 @@ class SelectSensor:
         self.covariance = cov.as_matrix()
 
         self.sensors = {}
+        init_f = 1 - 0.5*len(self.transmitters)
         with open(sensor_file, 'r') as f:
+            index = 0
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
                 x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
-                self.sensors[(x, y)] = Sensor(x, y, std, cost)
+                self.sensors[(x, y)] = Sensor(x, y, std, cost, pre_f=init_f, index=index)
+                index += 1
 
         with open(hypothesis_file, 'r') as f:
             lines = f.readlines()
@@ -137,12 +140,15 @@ class SelectSensor:
             filename (str)
         '''
         self.sensors = {}
+        init_f = 1 - 0.5*len(self.transmitters)
         with open(filename, 'r') as f:
+            index = 0
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
                 x, y, std = int(line[0]), int(line[1]), float(line[2])
-                self.sensors[(x, y)] = Sensor(x, y, std)
+                self.sensors[(x, y)] = Sensor(x, y, std, pre_f=init_f, index=index)
+                index += 1
 
 
     def save_mean_std(self, filename):
@@ -423,8 +429,6 @@ class SelectSensor:
             setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
             i += 1
         plot_data = []
-        base_ot = 1 - 0.5*len(self.transmitters)
-        # a heap here
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -445,6 +449,53 @@ class SelectSensor:
             cost += 1
             subset_to_compute.append(copy.deepcopy(subset_index))
             plot_data.append([len(subset_index), maximum, 0]) # don't compute real o_t now, delay to after all the subsets are selected
+
+        subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
+
+        for i in range(len(subset_results)):
+            plot_data[i][2] = subset_results[i]
+
+        return plot_data
+
+
+    def select_offline_greedy_p_lazy(self, budget, cores):
+        '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version
+        Attributes:
+            budget (int): budget constraint
+            cores (int): number of cores for parallelzation
+        Return:
+            (list): an element is [str, int, float],
+                    where str is the list of subset_index, int is # of sensors, float is O_T
+        '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
+            i += 1
+        plot_data = []
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_index = [i for i in range(self.sen_num)] # S\T in the paper
+        subset_to_compute = []
+        while cost < budget and complement_index:
+            while complement_index:
+
+                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in complement_index)
+
+                best_candidate = candidate_results[0][0]   # an element of candidate_results is a tuple - (int, float, list)
+                maximum = candidate_results[0][1]          # where int is the candidate, float is the O_T, list is the subset_list with new candidate
+                for candidate in candidate_results:
+                    print(candidate[2], candidate[1])
+                    if candidate[1] > maximum:
+                        best_candidate = candidate[0]
+                        maximum = candidate[1]
+
+                ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+                complement_index.remove(best_candidate)
+                cost += 1
+                subset_to_compute.append(copy.deepcopy(subset_index))
+                plot_data.append([len(subset_index), maximum, 0]) # don't compute real o_t now, delay to after all the subsets are selected
 
         subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
 
