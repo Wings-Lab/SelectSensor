@@ -63,14 +63,13 @@ class SelectSensor:
         self.covariance = cov.as_matrix()
 
         self.sensors = []
-        init_f = 1 - 0.5*len(self.transmitters)
         with open(sensor_file, 'r') as f:
             index = 0
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
                 x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
-                self.sensors.append(Sensor(x, y, std, cost, pre_f=init_f, index=index))
+                self.sensors.append(Sensor(x, y, std, cost, index=index))
                 index += 1
 
         with open(hypothesis_file, 'r') as f:
@@ -149,7 +148,6 @@ class SelectSensor:
             filename (str)
         '''
         self.sensors = []
-        init_f = 1 - 0.5*len(self.transmitters)
         max_gain = 0.5*len(self.transmitters)
         with open(filename, 'r') as f:
             index = 0
@@ -157,7 +155,7 @@ class SelectSensor:
             for line in lines:
                 line = line.split(' ')
                 x, y, std = int(line[0]), int(line[1]), float(line[2])
-                self.sensors.append(Sensor(x, y, std, pre_f=init_f, gain=max_gain, index=index))
+                self.sensors.append(Sensor(x, y, std, gain_up_bound=max_gain, index=index))
                 index += 1
 
 
@@ -451,7 +449,6 @@ class SelectSensor:
 
         for i in range(len(subset_results)):
             plot_data[i][2] = subset_results[i]
-
         return plot_data
 
 
@@ -464,49 +461,56 @@ class SelectSensor:
             (list): an element is [str, int, float],
                     where str is the list of subset_index, int is # of sensors, float is O_T
         '''
+        counter = 0
+        base_ot_approx = 1 - 0.5*len(self.transmitters)
         plot_data = []
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_sensors = copy.deepcopy(self.sensors)    # S\T in the paper
         subset_to_compute = []
         while cost < budget and complement_sensors:
-            max_gain = -1
             best_candidate = -1
             best_sensor = None
             complement_sensors.sort()   # sorting the gain descendingly
-            update = 0
+            new_base_ot_approx = 0
+            for sensor in complement_sensors:
+                print((sensor.index, sensor.gain_up_bound), end=' ')
+            print()
+            update, max_gain = 0, 0
             while update < len(complement_sensors):
                 update_end = update+cores if update+cores <= len(complement_sensors) else len(complement_sensors)
                 candidiate_index = []
                 for i in range(update, update_end):
                     candidiate_index.append(complement_sensors[i].index)
-
+                counter += 1
                 candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in candidiate_index)
                 # an element of candidate_results is a tuple - (index, o_t_approx, subsetlist)
-
                 for i, j in zip(range(update, update_end), range(0, cores)):  # the two range might be different, if the case, follow the first range
-                    complement_sensors[i].gain = candidate_results[j][1] - complement_sensors[i].pre_f  # update gain
-                    complement_sensors[i].pre_f = candidate_results[j][1]                               # update function o_t_approx
-                    if complement_sensors[i].gain > max_gain:
-                        max_gain = complement_sensors[i].gain
+                    complement_sensors[i].gain_up_bound = candidate_results[j][1] - base_ot_approx  # update the upper bound of gain
+                    if complement_sensors[i].gain_up_bound > max_gain:
+                        max_gain = complement_sensors[i].gain_up_bound
                         best_candidate = candidate_results[j][0]
                         best_sensor = complement_sensors[i]
+                        new_base_ot_approx = candidate_results[j][1]
 
-                if max_gain > complement_sensors[update+cores].gain:   # where the lazy happens
+                if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
+                    print('\n******LAZY!')
+                    print(cost, (update, update_end), len(complement_sensors), '\n******\n')
                     break
                 update += cores
-
+            base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
+            print(best_candidate, base_ot_approx, '\n\n')
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             subset_to_compute.append(copy.deepcopy(subset_index))
-            plot_data.append([len(subset_index), best_sensor.pre_f, 0]) # don't compute real o_t now, delay to after all the subsets are selected
+            plot_data.append([len(subset_index), base_ot_approx, 0]) # don't compute real o_t now, delay to after all the subsets are selected
             complement_sensors.remove(best_sensor)
             cost += 1
-
+        print('number of o_t_approx', counter)
         subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
 
         for i in range(len(subset_results)):
             plot_data[i][2] = subset_results[i]
-
+        
         return plot_data
 
 

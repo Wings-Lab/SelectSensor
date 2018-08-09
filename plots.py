@@ -41,8 +41,8 @@ def figure_1a(selectsensor):
     #plot_data = selectsensor.select_offline_random(12, 4)
     #save_data(plot_data, 'plot_data15/Offline_Random.csv')
 
-    plot_data = selectsensor.select_offline_greedy_p(4, 4)
-    save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
+    plot_data = selectsensor.select_offline_greedy_p_lazy(24, 4)
+    save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy_lazy.csv')
 
 
 def figure_1b(selectsensor):
