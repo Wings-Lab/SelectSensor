@@ -35,15 +35,15 @@ def figure_1a(selectsensor):
        Offline + Homogeneous
        Algorithm - greedy, coverage, and random
     '''
-    plot_data = selectsensor.select_offline_coverage(12, 4)
-    save_data(plot_data, 'plot_data15/Offline_Coverage.csv')
-    '''
-    plot_data = selectsensor.select_offline_random(12, 4)
-    save_data(plot_data, 'plot_data15/Offline_Random.csv')
+    #plot_data = selectsensor.select_offline_coverage(12, 4)
+    #save_data(plot_data, 'plot_data15/Offline_Coverage.csv')
 
-    plot_data = selectsensor.select_offline_greedy_p(12, 4)
+    #plot_data = selectsensor.select_offline_random(12, 4)
+    #save_data(plot_data, 'plot_data15/Offline_Random.csv')
+
+    plot_data = selectsensor.select_offline_greedy_p(4, 4)
     save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
-    '''
+
 
 def figure_1b(selectsensor):
     '''Y - Probability of error
