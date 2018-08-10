@@ -494,8 +494,7 @@ class SelectSensor:
                         new_base_ot_approx = candidate_results[j][1]
 
                 if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
-                    print('\n******LAZY!')
-                    print(cost, (update, update_end), len(complement_sensors), '\n******\n')
+                    print('\n***LAZY!***\n', cost, (update, update_end), len(complement_sensors), '\n')
                     break
                 update += cores
             base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
@@ -510,7 +509,7 @@ class SelectSensor:
 
         for i in range(len(subset_results)):
             plot_data[i][2] = subset_results[i]
-        
+
         return plot_data
 
 
@@ -616,6 +615,12 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        for sensor in self.sensors:
+            setattr(sensor, 'cost', energy[1][i%size])
+            i += 1
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
         complement_index = [i for i in range(self.sen_num)] # S\T in the paper
@@ -683,6 +688,150 @@ class SelectSensor:
             cost += self.sensors[best_candidate].cost
             second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, base_ot, cost)
+
+        first_pass = []
+        for data in first_pass_plot_data:
+            first_pass.append(data[0])
+        second_pass = []
+        for data in second_pass_plot_data:
+            second_pass.append(data[0])
+
+        first_pass_o_ts = Parallel(n_jobs=len(first_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in first_pass)
+        second_pass_o_ts = Parallel(n_jobs=len(second_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in second_pass)
+
+        for i in range(len(first_pass_o_ts)):
+            first_pass_plot_data[i][2] = first_pass_o_ts[i]
+        for i in range(len(second_pass_o_ts)):
+            second_pass_plot_data[i][2] = second_pass_o_ts[i]
+
+        first_final_o_t = first_pass_plot_data[len(first_pass_plot_data)-1][2]
+        second_final_o_t = second_pass_plot_data[len(second_pass_plot_data)-1][2]
+
+        if second_final_o_t > first_final_o_t:
+            print('second pass is selected')
+            return second_pass_plot_data
+        else:
+            print('first pass is selected')
+            return first_pass_plot_data
+
+
+    def select_offline_greedy_hetero_lazy(self, budget, cores):
+        '''(Lazy) Offline selection when the sensors are heterogeneous
+           Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
+
+        Attributes:
+            budget (int): budget we have for the heterogeneous sensors
+            cores (int): number of cores for parallelization
+            cost_filename (str): file that has the cost of sensors
+        '''
+        energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
+        size = energy[1].count()
+        i = 0
+        lowest_cost = 1
+        for sensor in self.sensors:
+            setattr(sensor, 'cost', energy[1][i%size])
+            if sensor.cost < lowest_cost:
+                lowest_cost = sensor.cost
+            i += 1
+
+        base_ot_approx = 1 - 0.5*len(self.transmitters)
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_sensors = copy.deepcopy(self.sensors)    # S\T in the paper
+        first_pass_plot_data = []
+        while cost < budget and complement_sensors:
+            complement_sensors.sort()           # sort the sensors by gain upper bound descendingly
+            option = []
+            for sensor in complement_sensors:
+                temp_cost = sensor.cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(sensor)
+            if not option:                      # if there are no sensors that can be selected, then break
+                break
+            best_candidate = -1
+            best_sensor = None
+            new_base_ot_approx = 0
+            update, max_gain = 0, 0
+            while update < len(option):
+                update_end = update+cores if update+cores <= len(option) else len(option)
+                candidiate_index = []
+                for i in range(update, update_end):
+                    candidiate_index.append(option[i].index)
+
+                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in candidiate_index)
+                # an element of candidate_results is a tuple - (index, o_t_approx, subsetlist)
+                for i, j in zip(range(update, update_end), range(0, cores)):  # the two range might be different, if the case, follow the first range
+                    complement_sensors[i].gain_up_bound = candidate_results[j][1] - base_ot_approx  # update the upper bound of gain
+                    if complement_sensors[i].gain_up_bound > max_gain:
+                        max_gain = complement_sensors[i].gain_up_bound
+                        best_candidate = candidate_results[j][0]
+                        best_sensor = complement_sensors[i]
+                        new_base_ot_approx = candidate_results[j][1]
+
+                if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
+                    print('\n******LAZY!')
+                    print(cost, (update, update_end), len(complement_sensors), '\n******\n')
+                    break
+                update += cores
+
+            base_ot_approx = new_base_ot_approx
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            complement_sensors.remove(best_sensor)
+            cost += self.sensors[best_candidate].cost
+            first_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
+            print(subset_index, base_ot_approx, cost, '\n')
+
+        print('end of the first homo pass and start of the second hetero pass')
+
+        max_gain_up_bound = 0.5*len(self.transmitters)/lowest_cost
+        for sensor in self.sensors:
+            sensor.gain_up_bound = max_gain_up_bound
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_sensors = copy.deepcopy(self.sensors)    # S\T in the paper
+        base_ot_approx = 1 - 0.5*len(self.transmitters)
+        second_pass_plot_data = []
+        while cost < budget and complement_sensors:
+            complement_sensors.sort()
+            option = []
+            for sensor in complement_sensors:
+                temp_cost = sensor.cost
+                if cost + temp_cost <= budget:  # a sensor can be selected if adding its cost is under budget
+                    option.append(sensor)
+            if not option:
+                break
+            best_candidate = -1
+            best_sensor = None
+            new_base_ot_approx = 0
+            update, max_gain = 0, 0
+            while update < len(option):
+                update_end = update+cores if update+cores <= len(complement_sensors) else len(complement_sensors)
+                candidiate_index = []
+                for i in range(update, update_end):
+                    candidiate_index.append(complement_sensors[i].index)
+
+                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in candidiate_index)
+                # an element of candidate_results is a tuple - (index, o_t_approx, subsetlist)
+                for i, j in zip(range(update, update_end), range(0, cores)):  # the two range might be different, if the case, follow the first range
+                    complement_sensors[i].gain_up_bound = (candidate_results[j][1] - base_ot_approx)/complement_sensors[i].cost  # update the upper bound of gain
+                    if complement_sensors[i].gain_up_bound > max_gain:
+                        max_gain = complement_sensors[i].gain_up_bound
+                        best_candidate = candidate_results[j][0]
+                        best_sensor = complement_sensors[i]
+                        new_base_ot_approx = candidate_results[j][1]
+
+                if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
+                    print('\n******LAZY!')
+                    print(cost, (update, update_end), len(complement_sensors), '\n******\n')
+                    break
+                update += cores
+
+            base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            complement_sensors.remove(best_sensor)
+            cost += self.sensors[best_candidate].cost
+            second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
+            print(subset_index, base_ot_approx, cost, '\n')
 
         first_pass = []
         for data in first_pass_plot_data:
@@ -1550,7 +1699,8 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    plots.figure_1a(selectsensor)
+    plots.figure_1b(selectsensor)
+    #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
     #plots.save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
 
