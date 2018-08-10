@@ -1,13 +1,16 @@
 '''
 Module for class Transmitter. A transmitter is essentially a hypothesis
 '''
+
+import numpy as np
+
 class Transmitter:
     '''Encapsulate a transmitter
     Attributes:
         x (int): location -  first dimension
         y (int): location -  second dimension
-        mean_vec (list):     mean vector, length is the number of sensors
-        mean_vec_sub (list): mean vector for subset of sensors
+        mean_vec (np.ndarray):     mean vector, length is the number of sensors
+        mean_vec_sub (np.ndarray): mean vector for subset of sensors
         multivariant_gaussian(scipy.stats.multivariate_normal):
                               each hypothesis corresponds to a multivariant guassian distribution
     '''
@@ -15,8 +18,8 @@ class Transmitter:
         self.x = x
         self.y = y
         self.hypothesis = 0
-        self.mean_vec = []
-        self.mean_vec_sub = []
+        self.mean_vec = np.zeros(0)
+        self.mean_vec_sub = np.zeros(0)
         self.multivariant_gaussian = None
         self.error = 0
 
@@ -26,9 +29,7 @@ class Transmitter:
         Attributes:
             subset_index (list): a list of index
         '''
-        self.mean_vec_sub = []
-        for index in subset_index:
-            self.mean_vec_sub.append(self.mean_vec[index])
+        self.mean_vec_sub = self.mean_vec[subset_index]
 
 
     def write_mean_vec(self, filename):

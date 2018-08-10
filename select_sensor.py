@@ -22,18 +22,18 @@ class SelectSensor:
     '''Near-optimal low-cost sensor selection
 
     Attributes:
-        config (json):       configurations - settings and parameters
-        sen_num (int):       the number of sensors
-        grid_len (int):      the length of the grid
+        config (json):               configurations - settings and parameters
+        sen_num (int):               the number of sensors
+        grid_len (int):              the length of the grid
         grid_priori (np.ndarray):    the element is priori probability of hypothesis - transmitter
         grid_posterior (np.ndarray): the element is posterior probability of hypothesis - transmitter
-        transmitters (list): a list of Transmitter
-        sensors (dict):      a dictionary of Sensor. less than 10% the # of transmitter
-        data (ndarray):      a 2D array of observation data
-        covariance (list):   a 2D list of covariance. each data share a same covariance matrix
-        mean_stds (dict):    assume sigal between a transmitter-sensor pair is normal distributed
-        subset (dict):       a subset of all sensors
-        subset_index (list): the linear index of sensor in self.sensors
+        transmitters (list):         a list of Transmitter
+        sensors (dict):              a dictionary of Sensor. less than 10% the # of transmitter
+        data (ndarray):              a 2D array of observation data
+        covariance (np.ndarray):     a 2D array of covariance. each data share a same covariance matrix
+        mean_stds (dict):            assume sigal between a transmitter-sensor pair is normal distributed
+        subset (dict):               a subset of all sensors
+        subset_index (list):         the linear index of sensor in self.sensors
     '''
     def __init__(self, filename):
         self.config = read_config(filename)
@@ -44,7 +44,7 @@ class SelectSensor:
         self.transmitters = []
         self.sensors = []
         self.data = np.zeros(0)
-        self.covariance = []
+        self.covariance = np.zeros(0)
         self.init_transmitters()
         self.set_priori()
         self.means_stds = {}
@@ -83,11 +83,12 @@ class SelectSensor:
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
-            transmitter.mean_vec = []
+            mean_vec = []
             for sensor in self.sensors:
                 sen_x, sen_y = sensor.x, sensor.y
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                transmitter.mean_vec.append(mean_std[0])
+                mean_vec.append(mean_std[0])
+            transmitter.mean_vec = np.array(mean_vec)
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         print('init done!')
 
@@ -229,11 +230,12 @@ class SelectSensor:
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
-            transmitter.mean_vec = []
+            mean_vec = []
             for sensor in self.sensors:
                 sen_x, sen_y = sensor.x, sensor.y
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                transmitter.mean_vec.append(mean_std[0])
+                mean_vec.append(mean_std[0])
+            transmitter.mean_vec = np.array(mean_vec)
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
 
 
@@ -259,9 +261,7 @@ class SelectSensor:
            update each transmitter's mean vector sub and multivariate gaussian function
         '''
         for transmitter in self.transmitters:
-            transmitter.mean_vec_sub = []
-            for index in self.subset_index:
-                transmitter.mean_vec_sub.append(transmitter.mean_vec[index])
+            transmitter.set_mean_vec_sub(self.subset_index)
             new_cov = self.covariance[np.ix_(self.subset_index, self.subset_index)]
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
 
@@ -307,16 +307,11 @@ class SelectSensor:
     def covariance_sub(self, subset_index):
         '''Given a list of index of sensors, return the sub covariance matrix
         Attributes:
-            subset_index (index): list of index of sensors. should be sorted.
+            subset_index (list): list of index of sensors. should be sorted.
         Return:
-            (list): a 2D sub covariance matrix
+            (np.ndarray): a 2D sub covariance matrix
         '''
-        sub_cov = []
-        for x in subset_index:
-            row = []
-            for y in subset_index:
-                row.append(self.covariance[x][y])
-            sub_cov.append(row)
+        sub_cov = self.covariance[np.ix_(subset_index, subset_index)]
         return sub_cov
 
 
@@ -354,7 +349,7 @@ class SelectSensor:
             if i_x == j_x and i_y == j_y:
                 continue
             transmitter_j.set_mean_vec_sub(subset_index)
-            pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+            pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
             prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
         product = 1
         for i in prob_i:
@@ -382,7 +377,7 @@ class SelectSensor:
                 if i_x == j_x and i_y == j_y:
                     continue
                 transmitter_j.set_mean_vec_sub(subset_index)
-                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
                 prob_i *= (1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
             o_t += prob_i * self.grid_priori[i_x][i_y]
         return o_t
@@ -408,7 +403,33 @@ class SelectSensor:
                 if i_x == j_x and i_y == j_y:
                     continue
                 transmitter_j.set_mean_vec_sub(subset_index)
-                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
+                prob_i += norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+            prob_error += prob_i * self.grid_priori[i_x][i_y]
+        return 1 - prob_error
+
+
+    def o_t_approximate_2(self, subset_index):
+        '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
+        Attributes:
+            subset_index (list): a subset of sensors T, needs guarantee sorted
+        '''
+        if not subset_index:  # empty sequence are false
+            return -99999999999.
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+        prob_error = 0                              # around 3% speed up by replacing [] to float
+
+        for transmitter_i in self.transmitters:
+            i_x, i_y = transmitter_i.x, transmitter_i.y
+            transmitter_i.set_mean_vec_sub(subset_index)
+            prob_i = 0
+            for transmitter_j in self.transmitters:
+                j_x, j_y = transmitter_j.x, transmitter_j.y
+                if i_x == j_x and i_y == j_y:
+                    continue
+                transmitter_j.set_mean_vec_sub(subset_index)
+                pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
                 prob_i += norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
             prob_error += prob_i * self.grid_priori[i_x][i_y]
         return 1 - prob_error
@@ -1013,7 +1034,7 @@ class SelectSensor:
                 if i_x == j_x and i_y == j_y:
                     continue
                 transmitter_j.set_mean_vec_sub(subset_index)
-                pj_pi = np.array(transmitter_j.mean_vec_sub) - np.array(transmitter_i.mean_vec_sub)
+                pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
                 prob_i.append(1 - norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))))
             product = 1
             for prob in prob_i:
