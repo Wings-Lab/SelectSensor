@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import pandas as pd
 #import numba
-#import line_profiler
+import line_profiler
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
 from scipy.stats import norm
@@ -384,7 +384,7 @@ class SelectSensor:
             o_t += prob_i * self.grid_priori[i_x][i_y]
         return o_t
 
-
+    @profile
     def o_t_approximate(self, subset_index):
         '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
         Attributes:
@@ -1722,8 +1722,8 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    #selectsensor.o_t_approximate_2([1, 2, 3, 4, 5])
-    plots.figure_1a(selectsensor)
+    selectsensor.o_t_approximate([0])
+    #plots.figure_1a(selectsensor)
     #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
     #plots.save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
