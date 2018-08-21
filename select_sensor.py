@@ -57,7 +57,7 @@ class SelectSensor:
         self.subset = {}
         self.subset_index = []
         self.meanvec_array = np.zeros(0)
-        self.TPB = 32
+        self.TPB = 16
 
 
     def init_from_real_data(self, cov_file, sensor_file, hypothesis_file):
@@ -234,7 +234,7 @@ class SelectSensor:
         '''
         data = pd.read_csv(sample_file, header=None)
         self.covariance = np.cov(data.as_matrix().T)  # compute covariance matrix by date from one transmitter
-        print('Computed covariance!')                 # assume all transmitters share the same covariance
+        #print('Computed covariance!')                 # assume all transmitters share the same covariance
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
@@ -427,19 +427,24 @@ class SelectSensor:
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
         prob_error = 0                              # around 3% speed up by replacing [] to float
-
+        i = 0
         for transmitter_i in self.transmitters:
             i_x, i_y = transmitter_i.x, transmitter_i.y
             transmitter_i.set_mean_vec_sub(subset_index)
             prob_i = 0
+            j = 0
             for transmitter_j in self.transmitters:
                 j_x, j_y = transmitter_j.x, transmitter_j.y
                 if i_x == j_x and i_y == j_y:
                     continue
                 transmitter_j.set_mean_vec_sub(subset_index)
                 pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
-                prob_i += norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+                tmp = norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+                prob_i += tmp
+                print((i, j, tmp*self.grid_priori[i_x][i_y]))
+                j += 1
             prob_error += prob_i * self.grid_priori[i_x][i_y]
+            i += 1
         return 1 - prob_error
 
 
@@ -1720,14 +1725,15 @@ class SelectSensor:
         d_meanvec_array = cuda.to_device(self.meanvec_array)
         d_subset_index = cuda.to_device(subset_index)
         d_sub_cov_inv = cuda.to_device(sub_cov_inv)
-        d_results = cuda.to_device((n_h, n_h), np.float64)
+        d_results = cuda.device_array((n_h, n_h), np.float64)
 
         threadsperblock = (self.TPB, self.TPB)
         blockspergrid_x = math.ceil(n_h/threadsperblock[0])
         blockspergrid_y = math.ceil(n_h/threadsperblock[1])
         blockspergrid = (blockspergrid_x, blockspergrid_y)
+        priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
 
-        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, d_results)
+        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
 
         results = d_results.copy_to_host()
         summation = results.sum()
@@ -1765,9 +1771,15 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    transmitter_array = selectsensor.transmitters_to_array()
-    print(transmitter_array.shape)
-    print(transmitter_array[0])
+    print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5]))
+    print('cuda:', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5])))
+
+    '''
+    for i in range(len(selectsensor.meanvec_array)):
+        for j in range(len(selectsensor.meanvec_array[i])):
+            print(str('%.3f' % selectsensor.meanvec_array[i, j]).ljust(7), end=' ')
+        print()
+    '''
     #plots.figure_1a(selectsensor)
     #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
