@@ -4,11 +4,12 @@ Select sensor and detect transmitter
 import random
 import math
 import copy
+import time
 import numpy as np
 import pandas as pd
 #import numba
 #import line_profiler
-from numba import cuda, float64
+from numba import cuda
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
 from scipy.stats import norm
@@ -1719,6 +1720,8 @@ class SelectSensor:
         Attributes:
             subset_index (np.ndarray, n=1): index of some sensors
         '''
+        start_total = time.time()
+        start = time.time()
         n_h = len(self.transmitters)   # number of hypotheses/transmitters
         sub_cov = self.covariance_sub(subset_index)
         sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
@@ -1732,11 +1735,17 @@ class SelectSensor:
         blockspergrid_y = math.ceil(n_h/threadsperblock[1])
         blockspergrid = (blockspergrid_x, blockspergrid_y)
         priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
+        print('data preparation time:', time.time()-start)
 
+        start = time.time()
         o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
+        print('pure kernal time:', time.time()-start)
 
+        start = time.time()
         results = d_results.copy_to_host()
         summation = results.sum()
+        print('summation time:', time.time()-start)
+        print('total time:', time.time() - start_total)
         return 1 - summation
 
 
@@ -1771,7 +1780,9 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    start = time.time()
     print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5]))
+    print('cpu time:', time.time()-start)
     print('cuda:', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5])))
 
     '''

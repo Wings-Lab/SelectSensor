@@ -3,9 +3,18 @@ CUDA kernals
 '''
 
 import math
-from scipy.stats import norm
+#from scipy.stats import norm
 import numpy as np
 from numba import cuda
+
+
+@cuda.jit(device=True)
+def q_function(x):
+    '''q_function(x) = 1 - norf_cdf(x). However, numba does not support scipy.stats.norm.
+       So we have to work around this issue. The way to fix this is to use math.erf to substitude scipy.stats.norm
+       https://stats.stackexchange.com/questions/187828/how-are-the-error-function-and-standard-normal-distribution-function-related
+    '''
+    return 1. - 0.5*(1. + math.erf(x/math.sqrt(2)))
 
 
 @cuda.jit
@@ -21,5 +30,5 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
     i, j = cuda.grid(2)
     if i < results.shape[0] and j < results.shape[1] and i != j:
         pj_pi = np.array(meanvec_array[j][subset_index]) - np.array(meanvec_array[i][subset_index])
-        results[i, j] = norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
+        results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
         #print((i, j, results[i, j]))
