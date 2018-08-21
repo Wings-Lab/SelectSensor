@@ -7,7 +7,8 @@ import copy
 import numpy as np
 import pandas as pd
 #import numba
-import line_profiler
+#import line_profiler
+from numba import cuda, float64
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
 from scipy.stats import norm
@@ -17,6 +18,7 @@ from transmitter import Transmitter
 from utility import read_config
 from utility import ordered_insert
 from it_tool import InformationTheoryTool
+from cuda_kernals import o_t_approx_kernal
 import plots
 
 
@@ -36,6 +38,8 @@ class SelectSensor:
         mean_stds (dict):            assume sigal between a transmitter-sensor pair is normal distributed
         subset (dict):               a subset of all sensors
         subset_index (list):         the linear index of sensor in self.sensors
+        meanvec_array (np.ndarray):  contains the mean vector of every transmitter, for CUDA
+        TPB (int):                   thread per block
     '''
     def __init__(self, filename):
         self.config = read_config(filename)
@@ -52,6 +56,8 @@ class SelectSensor:
         self.means_stds = {}
         self.subset = {}
         self.subset_index = []
+        self.meanvec_array = np.zeros(0)
+        self.TPB = 32
 
 
     def init_from_real_data(self, cov_file, sensor_file, hypothesis_file):
@@ -239,7 +245,7 @@ class SelectSensor:
                 mean_vec.append(mean_std[0])
             transmitter.mean_vec = np.array(mean_vec)
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
-
+        self.transmitters_to_array()
 
     def no_selection(self):
         '''The subset is all the sensors
@@ -384,7 +390,7 @@ class SelectSensor:
             o_t += prob_i * self.grid_priori[i_x][i_y]
         return o_t
 
-    @profile
+
     def o_t_approximate(self, subset_index):
         '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
         Attributes:
@@ -1691,6 +1697,43 @@ class SelectSensor:
         return plot_data
 
 
+    def transmitters_to_array(self):
+        '''transform the transmitter objects to numpy array, for the sake of CUDA
+        '''
+        mylist = []
+        for transmitter in self.transmitters:
+            templist = []
+            for mean in transmitter.mean_vec:
+                templist.append(mean)
+            mylist.append(templist)
+        self.meanvec_array = np.array(mylist)
+
+
+    def o_t_approx_host(self, subset_index):
+        '''host code for o_t_approx. Unoptimized with redundant memory transfer!
+        Attributes:
+            subset_index (np.ndarray, n=1): index of some sensors
+        '''
+        n_h = len(self.transmitters)   # number of hypotheses/transmitters
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
+        d_meanvec_array = cuda.to_device(self.meanvec_array)
+        d_subset_index = cuda.to_device(subset_index)
+        d_sub_cov_inv = cuda.to_device(sub_cov_inv)
+        d_results = cuda.to_device((n_h, n_h), np.float64)
+
+        threadsperblock = (self.TPB, self.TPB)
+        blockspergrid_x = math.ceil(n_h/threadsperblock[0])
+        blockspergrid_y = math.ceil(n_h/threadsperblock[1])
+        blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, d_results)
+
+        results = d_results.copy_to_host()
+        summation = results.sum()
+        return 1 - summation
+
+
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -1722,7 +1765,9 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    selectsensor.o_t_approximate([0])
+    transmitter_array = selectsensor.transmitters_to_array()
+    print(transmitter_array.shape)
+    print(transmitter_array[0])
     #plots.figure_1a(selectsensor)
     #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
