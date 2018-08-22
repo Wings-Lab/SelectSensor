@@ -3,8 +3,8 @@ CUDA kernals
 '''
 
 import math
-#import numpy as np
-from numba import cuda
+import numpy as np
+from numba import cuda, float64
 
 
 @cuda.jit('float64(float64)', device=True)
@@ -40,12 +40,12 @@ def matmul(A, B, C):
     '''
     for i in range(C.shape[0]):
         summation = 0
-        for k in range(A.shape[1]):
-            summation += A[i, k] * B[k, i]
+        for k in range(A.shape[0]):
+            summation += A[k] * B[k, i]      # C = np.dot(A, B)
         C[i] = summation
     summation = 0
     for i in range(C.shape[0]):
-        summation += C[i] * A[i]
+        summation += C[i] * A[i]             # np.dot(C, A)
     return summation
 
 
@@ -61,8 +61,8 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
     '''
     i, j = cuda.grid(2)
     if i < results.shape[0] and j < results.shape[1] and i != j:
-        pj_pi = cuda.local.array(len(subset_index))
-        tmp = cuda.local.array(len(subset_index))
+        pj_pi = cuda.local.array(len(subset_index), dtype=float64)
+        tmp = cuda.local.array(len(subset_index), dtype=float64)
         array_minus(meanvec_array[j][subset_index], meanvec_array[i][subset_index], pj_pi)
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
         #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
