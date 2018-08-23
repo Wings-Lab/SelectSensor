@@ -8,6 +8,13 @@ from numba import cuda, float64
 
 local_array_size = 0   # Global variables are treated as constants
 
+def update_local_array(size):
+    '''update local array size
+    '''
+    global local_array_size
+    local_array_size = size
+
+
 @cuda.jit('float64(float64)', device=True)
 def q_function(x):
     '''q_function(x) = 1 - norf_cdf(x). However, numba does not support scipy.stats.norm.
@@ -19,6 +26,16 @@ def q_function(x):
 
 @cuda.jit('void(float64[:], float64[:], float64[:])', device=True)
 def array_minus(A, B, C):
+    '''1D array minus. C = A - B
+    Attributes:
+        A, B, C (array-like)
+    '''
+    for i in range(C.shape[0]):
+        C[i] = A[i] - B[i]
+
+
+@cuda.jit('void(float64[:], float64[:], float64[:])', device=True)
+def get_pj_pi(A, B, C):
     '''1D array minus. C = A - B
     Attributes:
         A, B, C (array-like)
@@ -50,14 +67,7 @@ def matmul(A, B, C):
     return summation
 
 
-def update_local_array(size):
-    '''update local array size
-    '''
-    global local_array_size
-    local_array_size = size
-
-
-@cuda.jit('void(float64[:,:], float64[:], float64[:,:], float64, float64[:,:])')
+@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:])')
 def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
@@ -72,6 +82,7 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         pj_pi = cuda.local.array(local_array_size, dtype=float64)
         tmp = cuda.local.array(local_array_size, dtype=float64)
         array_minus(meanvec_array[j][subset_index], meanvec_array[i][subset_index], pj_pi)
+        #get_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
         #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
         #print((i, j, results[i, j]))
