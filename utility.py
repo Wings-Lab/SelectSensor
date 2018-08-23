@@ -41,7 +41,7 @@ def print_p0_pi(p0_pi):
     for i in range(p0_pi.shape[0]):
         for j in range(p0_pi[i].shape[0]):
             print(p0_pi[i, j], end=' ')
-        print()
+        print('\n')
 
 
 if __name__ == '__main__':
