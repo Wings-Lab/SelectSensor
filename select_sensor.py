@@ -1728,7 +1728,6 @@ class SelectSensor:
         d_subset_index = cuda.to_device(subset_index)
         d_sub_cov_inv = cuda.to_device(sub_cov_inv)
         d_results = cuda.device_array((n_h, n_h), np.float64)
-        d_p0_pi = cuda.device_array((n_h, len(subset_index)), np.float64)
 
         threadsperblock = (self.TPB, self.TPB)
         blockspergrid_x = math.ceil(n_h/threadsperblock[0])
@@ -1740,7 +1739,7 @@ class SelectSensor:
         update_local_array(subset_index.size)
 
         start = time.time()
-        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results, d_p0_pi)
+        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
         print('pure kernal time:', time.time()-start)
 
         start = time.time()
@@ -1748,8 +1747,6 @@ class SelectSensor:
         summation = results.sum()
         print('summation time:', time.time()-start)
         print('total time:', time.time() - start_total)
-        p0_pi = d_p0_pi.copy_to_host()
-        print_p0_pi(p0_pi)
         return 1 - summation
 
 
