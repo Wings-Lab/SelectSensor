@@ -59,7 +59,7 @@ def matmul(A, B, C):
     return summation
 
 
-@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:]')
+@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:])')
 def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
