@@ -16,8 +16,7 @@ from scipy.stats import norm
 from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
-from utility import read_config
-from utility import ordered_insert
+from utility import read_config, ordered_insert, print_results
 from it_tool import InformationTheoryTool
 from cuda_kernals import o_t_approx_kernal, update_local_array
 import plots
@@ -1748,6 +1747,7 @@ class SelectSensor:
         summation = results.sum()
         print('summation time:', time.time()-start)
         print('total time:', time.time() - start_total)
+        print_results(results)
         return 1 - summation
 
 
