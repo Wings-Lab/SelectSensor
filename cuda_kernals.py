@@ -42,7 +42,7 @@ def get_pj_pi(meanvec_array, subset_index, j, i, pj_pi):
     '''
     index = 0
     for k in subset_index:
-        pj_pi[index] = meanvec_array[j][k] - meanvec_array[i][k]
+        pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k]
         index += 1
 
 
@@ -59,18 +59,18 @@ def matmul(A, B, C):
         (float64)
     '''
     for i in range(C.shape[0]):
-        summation = 0
+        summation = 0.
         for k in range(A.shape[0]):
             summation += A[k] * B[k, i]      # C = np.dot(A, B)
         C[i] = summation
-    summation = 0
+    summation = 0.
     for i in range(C.shape[0]):
         summation += C[i] * A[i]             # np.dot(C, A)
     return summation
 
 
 @cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:])')
-def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
+def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results, p0_pi):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
         meanvec_array (np 2D array): contains the mean vector of every transmitter
@@ -85,6 +85,9 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         tmp = cuda.local.array(local_array_size, dtype=float64)
         #array_minus(meanvec_array[j][subset_index], meanvec_array[i][subset_index], pj_pi)
         get_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
+        if j == 0:
+            for k in range(pj_pi.shape[0]):
+                p0_pi[i, k] = pj_pi[k]
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
         #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
         #print((i, j, results[i, j]))
