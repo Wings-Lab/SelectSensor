@@ -19,7 +19,7 @@ from transmitter import Transmitter
 from utility import read_config
 from utility import ordered_insert
 from it_tool import InformationTheoryTool
-from cuda_kernals import o_t_approx_kernal
+from cuda_kernals import o_t_approx_kernal, update_local_array
 import plots
 
 
@@ -1736,6 +1736,8 @@ class SelectSensor:
         blockspergrid = (blockspergrid_x, blockspergrid_y)
         priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
         print('data preparation time:', time.time()-start)
+
+        update_local_array(subset_index.size)
 
         start = time.time()
         o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)

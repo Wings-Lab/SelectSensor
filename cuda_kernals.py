@@ -6,6 +6,7 @@ import math
 import numpy as np
 from numba import cuda, float64
 
+local_array_size = 0   # Global variables are treated as constants
 
 @cuda.jit('float64(float64)', device=True)
 def q_function(x):
@@ -16,7 +17,7 @@ def q_function(x):
     return 1. - 0.5*(1. + math.erf(x/math.sqrt(2.)))
 
 
-@cuda.jit('void(float64[:], float64[:])', device=True)
+@cuda.jit('void(float64[:], float64[:], float64[:])', device=True)
 def array_minus(A, B, C):
     '''1D array minus. C = A - B
     Attributes:
@@ -26,7 +27,7 @@ def array_minus(A, B, C):
         C[i] = A[i] - B[i]
 
 
-@cuda.jit('float64(float64[:], float64[:,:], float64[:]', device=True)
+@cuda.jit('float64(float64[:], float64[:,:], float64[:])', device=True)
 def matmul(A, B, C):
     '''Implement np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)
        1. C = np.dot(A, B)
@@ -49,7 +50,14 @@ def matmul(A, B, C):
     return summation
 
 
-@cuda.jit('void(float64[:,:], float64[:], float64[:,:], float64, float64[:,:]')
+def update_local_array(size):
+    '''update local array size
+    '''
+    global local_array_size
+    local_array_size = size
+
+
+@cuda.jit('void(float64[:,:], float64[:], float64[:,:], float64, float64[:,:])')
 def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
@@ -61,8 +69,8 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
     '''
     i, j = cuda.grid(2)
     if i < results.shape[0] and j < results.shape[1] and i != j:
-        pj_pi = cuda.local.array(len(subset_index), dtype=float64)
-        tmp = cuda.local.array(len(subset_index), dtype=float64)
+        pj_pi = cuda.local.array(local_array_size, dtype=float64)
+        tmp = cuda.local.array(local_array_size, dtype=float64)
         array_minus(meanvec_array[j][subset_index], meanvec_array[i][subset_index], pj_pi)
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
         #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
