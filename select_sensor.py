@@ -1782,9 +1782,9 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    #start = time.time()
-    #print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5, 7]))
-    #print('cpu time:', time.time()-start)
+    start = time.time()
+    print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5, 7]))
+    print('cpu time:', time.time()-start)
     print('cuda:', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
 
     '''
