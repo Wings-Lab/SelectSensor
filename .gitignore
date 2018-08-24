@@ -3,9 +3,6 @@
 __pycache__
 .vscode
 higherror.txt
-artificial_samples.csv
-mean_std.txt
-sensor.txt
 nohup.out
 config.json
 iq-files/*.iq
