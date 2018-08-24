@@ -6,7 +6,7 @@ import math
 import numpy as np
 from numba import cuda, float64
 
-local_array_size = 0   # Global variables are treated as constants
+local_array_size = 6   # Global variables are treated as constants
 
 def update_local_array(size):
     '''update local array size
@@ -59,8 +59,8 @@ def matmul(A, B, C):
     return summation
 
 
-@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:])')
-def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
+@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:], float64[:,:])')
+def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results, checkpoint):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
         meanvec_array (np 2D array): contains the mean vector of every transmitter
@@ -76,12 +76,23 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         else:
             pj_pi = cuda.local.array(local_array_size, dtype=float64)
             tmp = cuda.local.array(local_array_size, dtype=float64)
-            #get_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
+
             index = 0
             for k in subset_index:
-                pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k]
+                pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k] # set up pj_pi
                 index += 1
 
-            results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
+            for l in range(local_array_size):
+                summation = 0.
+                for k in range(local_array_size):
+                    summation += pj_pi[k] * sub_cov_inv[k, l]            # tmp = np.dot(pj_pi, sub_cov_inv)
+                tmp[l] = summation
+
+            summation = 0.
+            for l in range(local_array_size):
+                summation += tmp[l] * pj_pi[l]                                 # np.dot(tmp, pj_pi)
+
+            checkpoint[i, j] = summation
+            results[i, j] = q_function(0.5 * math.sqrt(checkpoint[i, j])) * priori
             #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
             #print((i, j, results[i, j]))
