@@ -70,15 +70,18 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         results (np 2D array):       save the all the results
     '''
     i, j = cuda.grid(2)
-    if i < results.shape[0] and j < results.shape[1] and i != j:
-        pj_pi = cuda.local.array(local_array_size, dtype=float64)
-        tmp = cuda.local.array(local_array_size, dtype=float64)
-        #get_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
-        index = 0
-        for k in subset_index:
-            pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k]
-            index += 1
+    if i < results.shape[0] and j < results.shape[1]:
+        if i == j:
+            results[i, j] = 0
+        else:
+            pj_pi = cuda.local.array(local_array_size, dtype=float64)
+            tmp = cuda.local.array(local_array_size, dtype=float64)
+            #get_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
+            index = 0
+            for k in subset_index:
+                pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k]
+                index += 1
 
-        results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
-        #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
-        #print((i, j, results[i, j]))
+            results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori
+            #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
+            #print((i, j, results[i, j]))
