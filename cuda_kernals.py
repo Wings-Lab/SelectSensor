@@ -3,16 +3,10 @@ CUDA kernals
 '''
 
 import math
-import numpy as np
 from numba import cuda, float64
 
-local_array_size = 6   # Global variables are treated as constants
 
-def update_local_array(size):
-    '''update local array size
-    '''
-    global local_array_size
-    local_array_size = size
+local_array_size = 6   # Global variables are treated as constants
 
 
 @cuda.jit('float64(float64)', device=True)
@@ -25,7 +19,7 @@ def q_function(x):
 
 
 @cuda.jit('void(float64[:,:], int64[:], int64, int64, float64[:])', device=True)
-def get_pj_pi(meanvec_array, subset_index, j, i, pj_pi):
+def set_pj_pi(meanvec_array, subset_index, j, i, pj_pi):
     '''1D array minus. C = A - B
     Attributes:
         A, B, C (array-like)
@@ -59,8 +53,8 @@ def matmul(A, B, C):
     return summation
 
 
-@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:], float64[:,:])')
-def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results, checkpoint):
+@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64, float64[:,:])')
+def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results):
     '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
         meanvec_array (np 2D array): contains the mean vector of every transmitter
@@ -70,29 +64,8 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results,
         results (np 2D array):       save the all the results
     '''
     i, j = cuda.grid(2)
-    if i < results.shape[0] and j < results.shape[1]:
-        if i == j:
-            results[i, j] = 0
-        else:
-            pj_pi = cuda.local.array(local_array_size, dtype=float64)
-            tmp = cuda.local.array(local_array_size, dtype=float64)
-
-            index = 0
-            for k in subset_index:
-                pj_pi[index] = meanvec_array[j, k] - meanvec_array[i, k] # set up pj_pi
-                index += 1
-
-            for l in range(local_array_size):
-                summation = 0.
-                for k in range(local_array_size):
-                    summation += pj_pi[k] * sub_cov_inv[k, l]            # tmp = np.dot(pj_pi, sub_cov_inv)
-                tmp[l] = summation
-
-            summation = 0.
-            for l in range(local_array_size):
-                summation += tmp[l] * pj_pi[l]                                 # np.dot(tmp, pj_pi)
-
-            checkpoint[i, j] = summation
-            results[i, j] = q_function(0.5 * math.sqrt(checkpoint[i, j])) * priori
-            #results[i, j] = q_function(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi))) * priori
-            #print((i, j, results[i, j]))
+    if i < results.shape[0] and j < results.shape[1] and i != j:  # warning: in Linux simulator, need to consider case i ==j
+        pj_pi = cuda.local.array(local_array_size, dtype=float64)
+        tmp = cuda.local.array(local_array_size, dtype=float64)
+        set_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
+        results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp))) * priori

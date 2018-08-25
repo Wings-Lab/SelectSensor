@@ -18,7 +18,7 @@ from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config, ordered_insert, print_results, print_p0_pi
 from it_tool import InformationTheoryTool
-from cuda_kernals import o_t_approx_kernal, update_local_array
+from cuda_kernals import o_t_approx_kernal
 import plots
 
 
@@ -1726,7 +1726,6 @@ class SelectSensor:
         d_subset_index = cuda.to_device(subset_index)
         d_sub_cov_inv = cuda.to_device(sub_cov_inv)
         d_results = cuda.device_array((n_h, n_h), np.float64)
-        d_checkpoint = cuda.device_array((n_h, n_h), np.float64)
 
         threadsperblock = (self.TPB, self.TPB)
         blockspergrid_x = math.ceil(n_h/threadsperblock[0])
@@ -1734,16 +1733,43 @@ class SelectSensor:
         blockspergrid = (blockspergrid_x, blockspergrid_y)
         priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
 
-        update_local_array(subset_index.size)
-
-        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results, d_checkpoint)
+        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
 
         results = d_results.copy_to_host()
-        #checkpoint = d_checkpoint.copy_to_host()
         summation = results.sum()
-        #print_results(results)
-        #print_results(checkpoint)
+        return 1 - summation
 
+
+    def o_t_approx_host_2(self, subset_index):
+        '''host code for o_t_approx. Unoptimized with redundant memory transfer!
+        Attributes:
+            subset_index (np.ndarray, n=1): index of some sensors
+        '''
+        start_total = time.time()
+        n_h = len(self.transmitters)   # number of hypotheses/transmitters
+        sub_cov = self.covariance_sub(subset_index)
+        sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
+        d_meanvec_array = cuda.to_device(self.meanvec_array)
+        d_subset_index = cuda.to_device(subset_index)
+        d_sub_cov_inv = cuda.to_device(sub_cov_inv)
+        d_results = cuda.device_array((n_h, n_h), np.float64)
+
+        threadsperblock = (self.TPB, self.TPB)
+        blockspergrid_x = math.ceil(n_h/threadsperblock[0])
+        blockspergrid_y = math.ceil(n_h/threadsperblock[1])
+        blockspergrid = (blockspergrid_x, blockspergrid_y)
+        priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
+        print('data prepare:', time.time()-start_total)
+
+        start_compute = time.time()
+        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
+        print('pure compute:', time.time()-start_compute)
+
+        start_summation = time.time()
+        results = d_results.copy_to_host()
+        summation = results.sum()
+        print('summation:   ', time.time()-start_summation)
+        print('total time:  ', time.time() - start_total)
         return 1 - summation
 
 
@@ -1778,20 +1804,20 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    start = time.time()
-    print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5, 7]))
-    print('cpu time:', time.time()-start)
-    start = time.time()
-    for _ in range(1000):
-        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7]))
-    print('time for one o_t_approx:', (time.time() - start)/1000.)
+    #start = time.time()
+    #print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5, 7]))
+    #print('cpu time:', time.time()-start)
+    #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
+    #print()
+    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
+    print()
+    #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
 
-    '''
-    for i in range(len(selectsensor.meanvec_array)):
-        for j in range(len(selectsensor.meanvec_array[i])):
-            print(str('%.3f' % selectsensor.meanvec_array[i, j]).ljust(7), end=' ')
-        print()
-    '''
+    start = time.time()
+    for _ in range(5000):
+        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7]))
+    print('time for one o_t_approx:', (time.time() - start)/5000.)
+
     #plots.figure_1a(selectsensor)
     #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
