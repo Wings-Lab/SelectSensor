@@ -56,7 +56,7 @@ class SelectSensor:
         self.subset = {}
         self.subset_index = []
         self.meanvec_array = np.zeros(0)
-        self.TPB = 16
+        self.TPB = 32
 
 
     def init_from_real_data(self, cov_file, sensor_file, hypothesis_file):
@@ -1775,9 +1775,9 @@ def main():
     #print('cpu time:', time.time()-start)
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print()
-    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
-    for _ in range(1000):
-        selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])))
+    for _ in range(10000):
+        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
         #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
 
