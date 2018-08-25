@@ -71,3 +71,24 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         tmp = cuda.local.array(local_array_size, dtype=float64)
         set_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp, subset_index.size))) * priori
+
+
+@cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64[:,:])')
+def o_t_kernal(meanvec_array, subset_index, sub_cov_inv, results):
+    '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
+    Attributes:
+        meanvec_array (np 2D array): contains the mean vector of every transmitter
+        subset_index (np 1D array):  index of some sensors
+        cov_inv (np 2D array):       inverse of a covariance matrix
+        priori (float64):            the prior of each hypothesis
+        results (np 2D array):       save the all the results
+    '''
+    i, j = cuda.grid(2)
+    if i < results.shape[0] and j < results.shape[1]:  # warning: in Linux simulator, need to consider case i ==j
+        if i == j:
+            results[i, j] = 1.
+        else:
+            pj_pi = cuda.local.array(local_array_size, dtype=float64)
+            tmp = cuda.local.array(local_array_size, dtype=float64)
+            set_pj_pi(meanvec_array, subset_index, j, i, pj_pi)
+            results[i, j] = (1 - q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp, subset_index.size))))
