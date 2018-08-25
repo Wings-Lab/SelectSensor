@@ -7,8 +7,7 @@ import copy
 import time
 import numpy as np
 import pandas as pd
-#import numba
-#import line_profiler
+import line_profiler
 from numba import cuda
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
@@ -16,7 +15,7 @@ from scipy.stats import norm
 from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
-from utility import read_config, ordered_insert, print_results, print_p0_pi
+from utility import read_config, ordered_insert#, print_results
 from it_tool import InformationTheoryTool
 from cuda_kernals import o_t_approx_kernal
 import plots
@@ -1713,7 +1712,7 @@ class SelectSensor:
             mylist.append(templist)
         self.meanvec_array = np.array(mylist)
 
-
+    @profile
     def o_t_approx_host(self, subset_index):
         '''host code for o_t_approx. Unoptimized with redundant memory transfer!
         Attributes:
@@ -1739,40 +1738,7 @@ class SelectSensor:
         summation = results.sum()
         return 1 - summation
 
-
-    def o_t_approx_host_2(self, subset_index):
-        '''host code for o_t_approx. Unoptimized with redundant memory transfer!
-        Attributes:
-            subset_index (np.ndarray, n=1): index of some sensors
-        '''
-        start_total = time.time()
-        n_h = len(self.transmitters)   # number of hypotheses/transmitters
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
-        d_meanvec_array = cuda.to_device(self.meanvec_array)
-        d_subset_index = cuda.to_device(subset_index)
-        d_sub_cov_inv = cuda.to_device(sub_cov_inv)
-        d_results = cuda.device_array((n_h, n_h), np.float64)
-
-        threadsperblock = (self.TPB, self.TPB)
-        blockspergrid_x = math.ceil(n_h/threadsperblock[0])
-        blockspergrid_y = math.ceil(n_h/threadsperblock[1])
-        blockspergrid = (blockspergrid_x, blockspergrid_y)
-        priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
-        print('data prepare:', time.time()-start_total)
-
-        start_compute = time.time()
-        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
-        print('pure compute:', time.time()-start_compute)
-
-        start_summation = time.time()
-        results = d_results.copy_to_host()
-        summation = results.sum()
-        print('summation:   ', time.time()-start_summation)
-        print('total time:  ', time.time() - start_total)
-        return 1 - summation
-
-
+   
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -1809,14 +1775,16 @@ def main():
     #print('cpu time:', time.time()-start)
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print()
-    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
-    print()
+    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])))
+    for _ in range(1000):
+        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
+        #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
 
-    start = time.time()
-    for _ in range(5000):
-        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7]))
-    print('time for one o_t_approx:', (time.time() - start)/5000.)
+    #start = time.time()
+    #for _ in range(5000):
+    #    selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7]))
+    #print('time for one o_t_approx:', (time.time() - start)/5000.)
 
     #plots.figure_1a(selectsensor)
     #plots.figure_1a(selectsensor)

@@ -6,7 +6,7 @@ import math
 from numba import cuda, float64
 
 
-local_array_size = 6   # Global variables are treated as constants
+local_array_size = 24   # Global variables are treated as constants
 
 
 @cuda.jit('float64(float64)', device=True)
