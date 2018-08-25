@@ -1738,7 +1738,7 @@ class SelectSensor:
         summation = results.sum()
         return 1 - summation
 
-   
+
 def new_data():
     '''Change config.json file, i.e. grid len and sensor number, then generate new data.
     '''
@@ -1771,13 +1771,13 @@ def main():
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
     #start = time.time()
-    #print('cpu :', selectsensor.o_t_approximate([1, 2, 3, 4, 5, 7]))
+    #print('cpu :', selectsensor.o_t_approximate([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cpu time:', time.time()-start)
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print()
-    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])))
+    print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
     for _ in range(1000):
-        selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
+        selectsensor.o_t_approx_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
         #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 7])))
 
