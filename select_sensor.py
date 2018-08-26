@@ -363,7 +363,7 @@ class SelectSensor:
             product *= i
         return product*self.grid_priori[i_x][i_y]
 
-    @profile
+
     def o_t(self, subset_index):
         '''Given a subset of sensors T, compute the O_T
         Attributes:
@@ -557,6 +557,7 @@ class SelectSensor:
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
         o_t = self.o_t_approximate(subset_index2)
+        #o_t = self.o_t_approx_host(subset_index2)
         return (candidate, o_t, subset_index2)
 
 
@@ -896,6 +897,7 @@ class SelectSensor:
         '''Compute the real o_t (accruacy of prediction)
         '''
         o_t = self.o_t(subset_index)
+        #o_t = self.o_t_host(subset_index)
         return o_t
 
 
@@ -1712,7 +1714,7 @@ class SelectSensor:
             mylist.append(templist)
         self.meanvec_array = np.array(mylist)
 
-    
+
     def o_t_approx_host(self, subset_index):
         '''host code for o_t_approx.
         Attributes:
@@ -1737,7 +1739,7 @@ class SelectSensor:
         results = d_results.copy_to_host()
         return 1 - results.sum()
 
-    @profile
+
     def o_t_host(self, subset_index):
         '''host code for o_t.
         Attributes:
@@ -1793,11 +1795,15 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    start = time.time()
+    plot_data = selectsensor.select_offline_greedy_p(12, 12)
+    print('time:', time.time()-start)
+    plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
 
-    print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
-    print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
-    for _ in range(10000):
-        selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+    #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+    #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
+    #for _ in range(10000):
+    #    selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
 
     #print('cpu :', selectsensor.o_t_approximate([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])))
