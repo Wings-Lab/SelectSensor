@@ -6,7 +6,7 @@ import math
 from numba import cuda, float64
 
 
-local_array_size = 24   # Global variables are treated as constants. Always initialize the largest size, i.e. the budget
+local_array_size = 30   # Global variables are treated as constants. Always initialize the largest size, i.e. the budget
 
 
 @cuda.jit('float64(float64)', device=True)

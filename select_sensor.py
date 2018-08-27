@@ -506,9 +506,9 @@ class SelectSensor:
             best_sensor = None
             complement_sensors.sort()   # sorting the gain descendingly
             new_base_ot_approx = 0
-            for sensor in complement_sensors:
-                print((sensor.index, sensor.gain_up_bound), end=' ')
-            print()
+            #for sensor in complement_sensors:
+            #    print((sensor.index, sensor.gain_up_bound), end=' ')
+            #print()
             update, max_gain = 0, 0
             while update < len(complement_sensors):
                 update_end = update+cores if update+cores <= len(complement_sensors) else len(complement_sensors)
@@ -1786,7 +1786,9 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
+    start = time.time()
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    print('time:', time.time()-start)
     plots.figure_1a(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
