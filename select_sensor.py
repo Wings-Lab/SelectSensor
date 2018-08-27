@@ -556,8 +556,8 @@ class SelectSensor:
         '''
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
-        o_t = self.o_t_approximate(subset_index2)
-        #o_t = self.o_t_approx_host(subset_index2)
+        #o_t = self.o_t_approximate(subset_index2)
+        o_t = self.o_t_approx_host(subset_index2)
         return (candidate, o_t, subset_index2)
 
 
@@ -896,8 +896,8 @@ class SelectSensor:
     def inner_greedy_real_ot(self, subset_index):
         '''Compute the real o_t (accruacy of prediction)
         '''
-        o_t = self.o_t(subset_index)
-        #o_t = self.o_t_host(subset_index)
+        #o_t = self.o_t(subset_index)
+        o_t = self.o_t_host(subset_index)
         return o_t
 
 
@@ -1786,19 +1786,19 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    #plots.figure_2a(selectsensor)
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    plots.figure_1a(selectsensor)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
     #fake data
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    start = time.time()
-    plot_data = selectsensor.select_offline_greedy_p(12, 12)
-    print('time:', time.time()-start)
-    plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
+    #selectsensor.read_init_sensor('data/sensor.txt')
+    #selectsensor.read_mean_std('data/mean_std.txt')
+    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    #start = time.time()
+    #plot_data = selectsensor.select_offline_greedy_p(12, 12)
+    #print('time:', time.time()-start)
+    #plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
