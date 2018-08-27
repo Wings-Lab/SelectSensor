@@ -1,0 +1,36 @@
+cuda o_t_approx 0.7513436339866667
+Wrote profile results to select_sensor.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 2.95853 s
+File: select_sensor.py
+Function: o_t_approx_host at line 1715
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+  1715                                               @profile
+  1716                                               def o_t_approx_host(self, subset_index):
+  1717                                                   '''host code for o_t_approx. Unoptimized with redundant memory transfer!
+  1718                                                   Attributes:
+  1719                                                       subset_index (np.ndarray, n=1): index of some sensors
+  1720                                                   '''
+  1721      1001       2778.0      2.8      0.1          n_h = len(self.transmitters)   # number of hypotheses/transmitters
+  1722      1001      76775.0     76.7      2.6          sub_cov = self.covariance_sub(subset_index)
+  1723      1001      65242.0     65.2      2.2          sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
+  1724      1001     552109.0    551.6     18.7          d_meanvec_array = cuda.to_device(self.meanvec_array)
+  1725      1001     457954.0    457.5     15.5          d_subset_index = cuda.to_device(subset_index)
+  1726      1001     417564.0    417.1     14.1          d_sub_cov_inv = cuda.to_device(sub_cov_inv)
+  1727      1001     339146.0    338.8     11.5          d_results = cuda.device_array((n_h, n_h), np.float64)
+  1728                                           
+  1729      1001       2811.0      2.8      0.1          threadsperblock = (self.TPB, self.TPB)
+  1730      1001       3850.0      3.8      0.1          blockspergrid_x = math.ceil(n_h/threadsperblock[0])
+  1731      1001       1696.0      1.7      0.1          blockspergrid_y = math.ceil(n_h/threadsperblock[1])
+  1732      1001       1213.0      1.2      0.0          blockspergrid = (blockspergrid_x, blockspergrid_y)
+  1733      1001       5040.0      5.0      0.2          priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
+  1734                                           
+  1735      1001     605472.0    604.9     20.5          o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
+  1736                                           
+  1737      1001     319680.0    319.4     10.8          results = d_results.copy_to_host()
+  1738      1001     102972.0    102.9      3.5          summation = results.sum()
+  1739      1001       4226.0      4.2      0.1          return 1 - summation
+
