@@ -97,6 +97,7 @@ class SelectSensor:
                 mean_vec.append(mean_std[0])
             transmitter.mean_vec = np.array(mean_vec)
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
+        self.transmitters_to_array()
         print('init done!')
 
 
@@ -1786,10 +1787,10 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    start = time.time()
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    print('time:', time.time()-start)
+    start = time.time()
     plots.figure_1a(selectsensor)
+    print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
