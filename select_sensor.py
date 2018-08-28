@@ -309,7 +309,8 @@ class SelectSensor:
     def inner_random(self, subset_index):
         '''Inner loop for random
         '''
-        o_t = self.o_t(subset_index)
+        #o_t = self.o_t(subset_index)
+        o_t = self.o_t_host(subset_index)
         return (subset_index, o_t)
 
 
@@ -1056,7 +1057,7 @@ class SelectSensor:
             for prob in prob_i:
                 product *= prob
             print(i, product)
-            if product > 0.01:     # set threshold
+            if product > 0.00001:     # set threshold
                 radius = i
             else:
                 break
