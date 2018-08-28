@@ -71,12 +71,13 @@ class SelectSensor:
 
         self.sensors = []
         with open(sensor_file, 'r') as f:
+            max_gain = 0.5*len(self.transmitters)
             index = 0
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
                 x, y, std, cost = int(line[0]), int(line[1]), float(line[2]), float(line[3])
-                self.sensors.append(Sensor(x, y, std, cost, index=index))
+                self.sensors.append(Sensor(x, y, std, cost, gain_up_bound=max_gain, index=index))
                 index += 1
 
         with open(hypothesis_file, 'r') as f:
