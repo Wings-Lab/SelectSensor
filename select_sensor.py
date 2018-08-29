@@ -58,7 +58,7 @@ class SelectSensor:
         self.meanvec_array = np.zeros(0)
         self.TPB = 32
 
-
+    #@profile
     def init_from_real_data(self, cov_file, sensor_file, hypothesis_file):
         '''Init everything from collected real data
            1. init covariance matrix
@@ -97,8 +97,9 @@ class SelectSensor:
                 mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
                 mean_vec.append(mean_std[0])
             transmitter.mean_vec = np.array(mean_vec)
-            setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
+            #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
+        del self.means_stds
         print('init done!')
 
 
@@ -366,7 +367,7 @@ class SelectSensor:
             product *= i
         return product*self.grid_priori[i_x][i_y]
 
-    @profile
+    #@profile
     def o_t(self, subset_index):
         '''Given a subset of sensors T, compute the O_T
         Attributes:
@@ -481,7 +482,7 @@ class SelectSensor:
             subset_to_compute.append(copy.deepcopy(subset_index))
             plot_data.append([len(subset_index), maximum, 0]) # don't compute real o_t now, delay to after all the subsets are selected
 
-            if maximum > 0.99999:
+            if maximum > 0.999:
                 break
 
         subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
@@ -690,6 +691,8 @@ class SelectSensor:
             cost += self.sensors[best_candidate].cost
             first_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, maximum, cost)
+            if maximum > 0.999:
+                break
 
         print('end of the first homo pass and start of the second hetero pass')
 
@@ -728,6 +731,8 @@ class SelectSensor:
             cost += self.sensors[best_candidate].cost
             second_pass_plot_data.append([copy.deepcopy(subset_index), cost, 0])           # Y value is real o_t
             print(subset_index, base_ot, cost)
+            if maximum > 0.999:
+                break
 
         first_pass = []
         for data in first_pass_plot_data:
@@ -1745,7 +1750,7 @@ class SelectSensor:
         results = d_results.copy_to_host()
         return 1 - results.sum()
 
-    @profile
+    #@profile
     def o_t_host(self, subset_index):
         '''host code for o_t.
         Attributes:
@@ -1793,9 +1798,9 @@ def main():
 
     #real data
     selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    #start = time.time()
-    #plots.figure_1a(selectsensor)
-    #print('time:', time.time()-start)
+    start = time.time()
+    plots.figure_1a(selectsensor)
+    print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
@@ -1809,9 +1814,9 @@ def main():
     #plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
-    print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
-    for _ in range(100):
-        selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+    #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
+    #for _ in range(100):
+    #    selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
 
     #print('cpu :', selectsensor.o_t_approximate([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t_approx', selectsensor.o_t_approx_host(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])))

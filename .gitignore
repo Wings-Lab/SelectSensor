@@ -3,7 +3,6 @@
 __pycache__
 .vscode
 higherror.txt
-nohup.out
 config.json
 iq-files/*.iq
 iq-files/*.png
