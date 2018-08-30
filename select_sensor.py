@@ -485,7 +485,7 @@ class SelectSensor:
             if maximum > 0.999:
                 break
 
-        subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
 
         for i in range(len(subset_results)):
             plot_data[i][2] = subset_results[i]
@@ -538,14 +538,14 @@ class SelectSensor:
                     break
                 update += cores
             base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
-            print(best_candidate, base_ot_approx, '\n\n')
+            print(best_candidate, subset_index, base_ot_approx, '\n')
             ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
             subset_to_compute.append(copy.deepcopy(subset_index))
             plot_data.append([len(subset_index), base_ot_approx, 0]) # don't compute real o_t now, delay to after all the subsets are selected
             complement_sensors.remove(best_sensor)
             cost += 1
         print('number of o_t_approx', counter)
-        subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
 
         for i in range(len(subset_results)):
             plot_data[i][2] = subset_results[i]
@@ -769,6 +769,7 @@ class SelectSensor:
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
         '''
+        '''
         energy = pd.read_csv('data/energy.txt', header=None)  # load the energy cost
         size = energy[1].count()
         i = 0
@@ -778,7 +779,7 @@ class SelectSensor:
             if sensor.cost < lowest_cost:
                 lowest_cost = sensor.cost
             i += 1
-
+        '''
         base_ot_approx = 1 - 0.5*len(self.transmitters)
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
@@ -885,8 +886,8 @@ class SelectSensor:
         for data in second_pass_plot_data:
             second_pass.append(data[0])
 
-        first_pass_o_ts = Parallel(n_jobs=len(first_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in first_pass)
-        second_pass_o_ts = Parallel(n_jobs=len(second_pass_plot_data))(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in second_pass)
+        first_pass_o_ts = Parallel(n_jobs=cores)(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in first_pass)
+        second_pass_o_ts = Parallel(n_jobs=cores)(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in second_pass)
 
         for i in range(len(first_pass_o_ts)):
             first_pass_plot_data[i][2] = first_pass_o_ts[i]
@@ -1797,9 +1798,10 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     start = time.time()
-    plots.figure_1a(selectsensor)
+    plots.figure_1b(selectsensor)
     print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
