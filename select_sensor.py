@@ -67,7 +67,7 @@ class SelectSensor:
         '''
         cov = pd.read_csv(cov_file, header=None, delimiter=' ')
         del cov[len(cov)]
-        self.covariance = cov.as_matrix()
+        self.covariance = cov.values
 
         self.sensors = []
         with open(sensor_file, 'r') as f:
