@@ -175,8 +175,8 @@ def process_iq(filename, NFFT):
 import random as rand
 
 def compute_cov(df):
-    length = 32 #length and width of grid
-    number_of_sensors = 128 #change this to add or reduce sensors
+    length = 64              # change length and width of grid
+    number_of_sensors = 1000 # change this to add or reduce sensors
     print('caitao\n', df['stdvalues'])
     cov = np.zeros((number_of_sensors, number_of_sensors))
     cov_file = open('cov', 'w')
@@ -238,8 +238,8 @@ def generate_hypothesis_data():
     print('check point 3\n', df)
     cov = compute_cov(df)
 
-    length = 32 #change number of cells
-    number_of_sensors = 128 #change number of sensors
+    length = 64              # change number of cells
+    number_of_sensors = 1000 # change number of sensors
     sensor_locations = random.sample(range(length * length), number_of_sensors)
     sensor_configs = [2 ** random.randrange(start_logNFFT, end_logNFFT + 1) for i in range(len(sensor_locations))]
     sensor_file = open('sensors', 'w')
