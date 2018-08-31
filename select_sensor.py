@@ -7,7 +7,7 @@ import copy
 import time
 import numpy as np
 import pandas as pd
-import line_profiler
+#import line_profiler
 from numba import cuda
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal
@@ -15,7 +15,7 @@ from scipy.stats import norm
 from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
-from utility import read_config, ordered_insert#, print_results
+from utility import read_config, ordered_insert
 from it_tool import InformationTheoryTool
 from cuda_kernals import o_t_approx_kernal, o_t_kernal
 import plots
@@ -99,7 +99,7 @@ class SelectSensor:
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
-        del self.means_stds
+        del self.means_stds  # need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -450,7 +450,7 @@ class SelectSensor:
             i += 1
         return 1 - prob_error
 
-    
+
     def select_offline_greedy_p(self, budget, cores):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
         Attributes:
