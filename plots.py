@@ -51,13 +51,13 @@ def figure_1b(selectsensor):
        Offline + Heterogeneous
        Algorithm - greedy, coverage, and random
     '''
-    plot_data = selectsensor.select_offline_random_hetero(40, 6)
-    save_data(plot_data, 'plot_data64/Offline_Random_hetero.csv')
+    #plot_data = selectsensor.select_offline_random_hetero(40, 6)
+    #save_data(plot_data, 'plot_data64/Offline_Random_hetero.csv')
 
-    plot_data = selectsensor.select_offline_coverage_hetero(30, 6)
-    save_data(plot_data, 'plot_data64/Offline_Coverage_hetero.csv')
+    #plot_data = selectsensor.select_offline_coverage_hetero(30, 6)
+    #save_data(plot_data, 'plot_data64/Offline_Coverage_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero_lazy(20, 6)
+    plot_data = selectsensor.select_offline_greedy_hetero_lazy(20, 12)
     save_data(plot_data, 'plot_data64/Offline_Greedy_hetero.csv')
 
 
