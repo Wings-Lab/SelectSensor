@@ -17,7 +17,7 @@ from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config, ordered_insert
 from it_tool import InformationTheoryTool
-from cuda_kernals import o_t_approx_kernal, o_t_kernal
+#from cuda_kernals import o_t_approx_kernal, o_t_kernal
 import plots
 
 
@@ -99,7 +99,7 @@ class SelectSensor:
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
-        del self.means_stds  # need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
+        #del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -1802,13 +1802,13 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
-    selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
-    start = time.time()
-    plots.figure_1b(selectsensor)
-    print('time:', time.time()-start)
+    #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
+    #start = time.time()
+    #plots.figure_1b(selectsensor)
+    #print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
