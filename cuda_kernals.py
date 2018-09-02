@@ -76,6 +76,10 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
 @cuda.jit('float64(int64, int64)', device=True)
 def distance_of_hypothesis(i, j, hypothesis_num):
     '''Compute the euclidian distance between two hypothesis.
+    Attributes:
+        i (int): i_{th} hypothesis
+        j (int): j_{th} hypothesis
+        hypothesis_num (int): the total number of hypothesis, equals to grid_len^2
     '''
     grid_len = int(math.sqrt(float(hypothesis_num)))
     i_x = i//grid_len
@@ -106,12 +110,11 @@ def o_t_approx_dist_kernal(meanvec_array, subset_index, sub_cov_inv, priori, res
 
 @cuda.jit('void(float64[:,:], int64[:], float64[:,:], float64[:,:])')
 def o_t_kernal(meanvec_array, subset_index, sub_cov_inv, results):
-    '''The kernal for o_t_approx. Each thread executes a kernal, which is responsible for one element in results array.
+    '''The kernal for o_t. Each thread executes a kernal, which is responsible for one element in results array.
     Attributes:
         meanvec_array (np 2D array): contains the mean vector of every transmitter
         subset_index (np 1D array):  index of some sensors
         cov_inv (np 2D array):       inverse of a covariance matrix
-        priori (float64):            the prior of each hypothesis
         results (np 2D array):       save the all the results
     '''
     i, j = cuda.grid(2)
