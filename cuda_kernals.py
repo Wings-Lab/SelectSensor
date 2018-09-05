@@ -73,7 +73,7 @@ def o_t_approx_kernal(meanvec_array, subset_index, sub_cov_inv, priori, results)
         results[i, j] = q_function(0.5 * math.sqrt(matmul(pj_pi, sub_cov_inv, tmp, subset_index.size))) * priori
 
 
-@cuda.jit('float64(int64, int64)', device=True)
+@cuda.jit('float64(int64, int64, int64)', device=True)
 def distance_of_hypothesis(i, j, hypothesis_num):
     '''Compute the euclidian distance between two hypothesis.
     Attributes:

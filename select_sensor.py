@@ -14,9 +14,9 @@ from scipy.stats import multivariate_normal, norm, entropy
 from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
-from utility import read_config, ordered_insert
+from utility import read_config, ordered_insert, print_results
 from it_tool import InformationTheoryTool
-#from cuda_kernals import o_t_approx_kernal, o_t_kernal
+from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
 
 
@@ -98,7 +98,7 @@ class SelectSensor:
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
-        #del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
+        del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -491,7 +491,7 @@ class SelectSensor:
         return plot_data
 
 
-    def select_offline_greedy_p_lazy(self, budget, cores):
+    def select_offline_greedy_p_lazy(self, budget, cores, cuda_kernal=None):
         '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version
         Attributes:
             budget (int): budget constraint
@@ -501,7 +501,16 @@ class SelectSensor:
                     where str is the list of subset_index, int is # of sensors, float is O_T
         '''
         counter = 0
-        base_ot_approx = 1 - 0.5*len(self.transmitters)
+        base_ot_approx = 0
+        if cuda_kernal == o_t_approx_kernal:
+            base_ot_approx = 1 - 0.5*len(self.transmitters)
+        elif cuda_kernal == o_t_approx_dist_kernal:
+            largest_dist = (self.grid_len-1)*math.sqrt(2)
+            max_gain_up_bound = 0.5*len(self.transmitters)*largest_dist   # the default bound is for non-distance
+            for sensor in self.sensors:                                   # need to update the max gain upper bound for o_t_approx with distance
+                sensor.gain_up_bound = max_gain_up_bound
+            base_ot_approx = (1 - 0.5*len(self.transmitters))*largest_dist
+
         plot_data = []
         cost = 0                                            # |T| in the paper
         subset_index = []                                   # T   in the paper
@@ -522,10 +531,11 @@ class SelectSensor:
                 for i in range(update, update_end):
                     candidiate_index.append(complement_sensors[i].index)
                 counter += 1
-                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, candidate) for candidate in candidiate_index)
+                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy)(subset_index, cuda_kernal, candidate) for candidate in candidiate_index)
                 # an element of candidate_results is a tuple - (index, o_t_approx, subsetlist)
                 for i, j in zip(range(update, update_end), range(0, cores)):  # the two range might be different, if the case, follow the first range
                     complement_sensors[i].gain_up_bound = candidate_results[j][1] - base_ot_approx  # update the upper bound of gain
+                    #print(candidate_results[j][2], candidate_results[j][1], base_ot_approx, complement_sensors[i].gain_up_bound)
                     if complement_sensors[i].gain_up_bound > max_gain:
                         max_gain = complement_sensors[i].gain_up_bound
                         best_candidate = candidate_results[j][0]
@@ -552,7 +562,7 @@ class SelectSensor:
         return plot_data
 
 
-    def inner_greedy(self, subset_index, candidate):
+    def inner_greedy(self, subset_index, cuda_kernal, candidate):
         '''Inner loop for selecting candidates
         Attributes:
             subset_index (list):
@@ -563,7 +573,7 @@ class SelectSensor:
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
         #o_t = self.o_t_approximate(subset_index2)
-        o_t = self.o_t_approx_host(subset_index2)
+        o_t = self.o_t_approx_host_2(subset_index2, cuda_kernal)
         return (candidate, o_t, subset_index2)
 
 
@@ -1853,8 +1863,8 @@ class SelectSensor:
         results = d_results.copy_to_host()
         return 1 - results.sum()
 
-    """
-    def o_t_approx_host_2(self, subset_index, cuda_kernal=o_t_approx_kernal):
+
+    def o_t_approx_host_2(self, subset_index, cuda_kernal):
         '''host code for o_t_approx.
         Attributes:
             subset_index (np.ndarray, n=1): index of some sensors
@@ -1876,8 +1886,9 @@ class SelectSensor:
         cuda_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
 
         results = d_results.copy_to_host()
+        #print_results(results)
         return 1 - results.sum()
-    """
+
 
     #@profile
     def o_t_host(self, subset_index):
@@ -1926,24 +1937,26 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
-    #start = time.time()
-    #plots.figure_1b(selectsensor)
-    #print('time:', time.time()-start)
+    #print('o_t_approx:', selectsensor.o_t_approx_host_2(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]), o_t_approx_kernal), '\n\n')
+    #print('o_t_approx_dist:', selectsensor.o_t_approx_host_2(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]), o_t_approx_dist_kernal))
+    start = time.time()
+    plots.figure_1a(selectsensor, o_t_approx_dist_kernal)
+    print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
     #fake data
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    start = time.time()
+    #selectsensor.read_init_sensor('data/sensor.txt')
+    #selectsensor.read_mean_std('data/mean_std.txt')
+    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    #start = time.time()
     #plot_data = selectsensor.select_online_greedy_p(4, 4, 250)
-    plot_data = selectsensor.select_online_greedy(3, 250)
-    print('time:', time.time()-start)
+    #plot_data = selectsensor.select_online_greedy(3, 250)
+    #print('time:', time.time()-start)
     #plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))

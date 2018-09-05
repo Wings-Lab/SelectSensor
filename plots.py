@@ -29,20 +29,20 @@ def save_data_offline_greedy(plot_data, file_path):
             f.write(str(data[0]) + ',' + str(data[1]) + ',' + str(data[2]) + '\n')
 
 
-def figure_1a(selectsensor):
+def figure_1a(selectsensor, cuda_kernal):
     '''Y - Probability of error
        X - # of sensor
        Offline + Homogeneous
        Algorithm - greedy, coverage, and random
     '''
-    #plot_data = selectsensor.select_offline_coverage(70, 4)
-    #save_data(plot_data, 'plot_data64/Offline_Coverage_2.csv')
+    #plot_data = selectsensor.select_offline_coverage(10, 12)
+    #save_data(plot_data, 'plot_data64/Offline_Coverage_dist.csv')
 
-    #plot_data = selectsensor.select_offline_random(100, 4)
-    #save_data(plot_data, 'plot_data64/Offline_Random.csv')
+    #plot_data = selectsensor.select_offline_random(150, 12)
+    #save_data(plot_data, 'plot_data64/Offline_Random_dist.csv')
 
-    plot_data = selectsensor.select_offline_greedy_p_lazy(40, 4)
-    save_data_offline_greedy(plot_data, 'plot_data64/Offline_Greedy.csv')
+    plot_data = selectsensor.select_offline_greedy_p_lazy(40, 12, cuda_kernal)
+    save_data_offline_greedy(plot_data, 'plot_data64/Offline_Greedy_dist.csv')
 
 
 def figure_1b(selectsensor):
