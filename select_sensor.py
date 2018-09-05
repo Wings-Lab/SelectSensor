@@ -16,7 +16,7 @@ from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config, ordered_insert, print_results
 from it_tool import InformationTheoryTool
-from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
+#from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
 
 
@@ -98,7 +98,7 @@ class SelectSensor:
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
-        del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
+        #del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -1347,7 +1347,7 @@ class SelectSensor:
             cost += 1
         return plot_data
 
-
+    @profile
     def select_online_greedy_2(self, budget, true_index):
         '''The online greedy selection version 2. Homogeneous.
         Attributes:
@@ -1372,7 +1372,7 @@ class SelectSensor:
             best_candidate = complement_index[0]
             for candidate in complement_index:
                 ordered_insert(subset_index, candidate)
-                mi = self.mutual_information(subset_index, true_hypotheses)
+                mi = self.mutual_information_2(subset_index, true_transmitter, h_h)
                 print(subset_index, 'MI =', mi)
                 if mi > maximum:
                     maximum = mi
@@ -1382,6 +1382,7 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             plot_data.append([str(subset_index), len(subset_index), maximum])
             print('MI = ', maximum)
+            h_h -= maximum
             self.print_subset(subset_index)
             self.update_hypothesis_2(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
@@ -1445,14 +1446,13 @@ class SelectSensor:
     def update_hypothesis_2(self, true_transmitter, subset_index):
         '''Use Bayes formula to update P(hypothesis): form prior to posterior
            After we add a new sensor and get a larger subset, the larger subset begins to observe data from true transmitter
+           An important update from update_hypothesis to update_hypothesis_2 is that we are not using transmitter.multivariant_gaussian. To save memory
         Attributes:
             true_transmitter (Transmitter)
             subset_index (list)
         '''
-        #self.subset_index = subset_index
-        #self.update_transmitters()
         true_x, true_y = true_transmitter.x, true_transmitter.y
-        np.random.seed(true_x*self.grid_len + true_y)
+        np.random.seed(true_x*self.grid_len + true_y*true_y)  # change seed here
         data = []                          # the true transmitter generate some data
         for index in subset_index:
             sensor = self.sensors[index]
@@ -1460,7 +1460,7 @@ class SelectSensor:
             data.append(np.random.normal(mean, std))
         for trans in self.transmitters:
             trans.set_mean_vec_sub(subset_index)
-            cov_sub = self.covariance[np.ix_(self.subset_index, self.subset_index)]
+            cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
             likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
             self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
         denominator = self.grid_posterior.sum()
@@ -1538,7 +1538,7 @@ class SelectSensor:
         it_tool = InformationTheoryTool(data)
         return it_tool.mutual_information(0, 1)
 
-
+    @profile
     def mutual_information_2(self, subset_index, true_transmitter, h_h):
         '''the 2nd version of mutual information without generating data, should be faster
         Attributes:
@@ -1548,10 +1548,10 @@ class SelectSensor:
         Return:
             (float) mutual information
         '''
-        posterior = np.zeros(self.grid_len*self.grid_len)  # compute the entropy from the "temporary priori grid", and select the best one
         if not subset_index:
             return 0
-        np.random.seed(true_transmitter.x*self.grid + true_transmitter.y)
+        posterior = np.zeros(self.grid_len*self.grid_len)  # compute the entropy from the "temporary posterior grid"
+        np.random.seed(true_transmitter.x*self.grid_len + true_transmitter.y)
         data = []   # the true transmitter generate some data
         for index in subset_index:
             sensor = self.sensors[index]
@@ -1559,9 +1559,10 @@ class SelectSensor:
             data.append(np.random.normal(mean, std))
         for trans in self.transmitters:
             trans.set_mean_vec_sub(subset_index)
-            cov_sub = self.covariance[np.ix_(self.subset_index, self.subset_index)]
+            cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
             likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
             posterior[trans.x * self.grid_len + trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
+        posterior = posterior/posterior.sum()
         return h_h - entropy(posterior, base=2)
 
 
@@ -1937,27 +1938,28 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #print('o_t_approx:', selectsensor.o_t_approx_host_2(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]), o_t_approx_kernal), '\n\n')
     #print('o_t_approx_dist:', selectsensor.o_t_approx_host_2(np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]), o_t_approx_dist_kernal))
-    start = time.time()
-    plots.figure_1a(selectsensor, o_t_approx_dist_kernal)
-    print('time:', time.time()-start)
+    #start = time.time()
+    #plots.figure_1a(selectsensor, o_t_approx_dist_kernal)
+    #print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
     #plots.figure_1b(selectsensor)
 
     #fake data
-    #selectsensor.read_init_sensor('data/sensor.txt')
-    #selectsensor.read_mean_std('data/mean_std.txt')
-    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    #start = time.time()
+    selectsensor.read_init_sensor('data/sensor.txt')
+    selectsensor.read_mean_std('data/mean_std.txt')
+    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    start = time.time()
     #plot_data = selectsensor.select_online_greedy_p(4, 4, 250)
     #plot_data = selectsensor.select_online_greedy(3, 250)
-    #print('time:', time.time()-start)
-    #plots.save_data_offline_greedy(plot_data, 'plot_data16/Offline_Greedy_cpu.csv')
+    plot_data = selectsensor.select_online_greedy_2(3, 250)
+    print('time:', time.time()-start)
+    #plots.save_data_(plot_data, 'plot_data32/Online_Greedy_v2.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
@@ -1980,7 +1982,6 @@ def main():
     #plots.figure_1a(selectsensor)
     #plot_data = selectsensor.select_offline_greedy_p(10, 4)
     #plots.save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
-
 
 if __name__ == '__main__':
     #new_data()
