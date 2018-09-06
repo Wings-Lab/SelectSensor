@@ -1851,7 +1851,8 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    plots.figure_2a(selectsensor)
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
@@ -1864,16 +1865,16 @@ def main():
     #plots.figure_1b(selectsensor)
 
     #fake data
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
+    #selectsensor.read_init_sensor('data/sensor.txt')
+    #selectsensor.read_mean_std('data/mean_std.txt')
+    #selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
 
     #plot_data = selectsensor.select_online_greedy(3, 250)
     #plot_data = selectsensor.select_online_greedy_2(3, 250)
-    start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(3, 4, 250)
-    print('time:', time.time()-start)
-    plots.save_data(plot_data, 'plot_data16/Online_Greedy_v2_.csv')
+    #start = time.time()
+    #plot_data = selectsensor.select_online_greedy_p(3, 4, 250)
+    #print('time:', time.time()-start)
+    #plots.save_data(plot_data, 'plot_data16/Online_Greedy_v2_.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
