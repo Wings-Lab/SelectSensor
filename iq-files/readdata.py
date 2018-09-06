@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 from pylab import *
 import numpy as np
 import scipy
@@ -175,7 +175,6 @@ def process_iq(filename, NFFT):
 import random as rand
 
 def compute_cov(df):
-    print(df['stdvalues'])
     cov = np.zeros((number_of_sensors, number_of_sensors))
     cov_file = open('cov', 'w')
     print (len(df))
@@ -187,6 +186,13 @@ def compute_cov(df):
                 #     cov[i, j] = 1.5 * 1.5
                 # elif cov[i, j] > 2.5 * 2.5: # upper limit of std dev
                 #     cov[i, j] = 2.5 * 2.5
+                cov[i, j] = df['stdvalues'].iloc[random.randint(0, len(df)-1)] ** 2
+                '''
+                if cov[i, j] < 1.5 * 1.5: #lower limit of std dev
+                    cov[i, j] = 1.5 * 1.5
+                elif cov[i, j] > 2.5 * 2.5: # upper limit of std dev
+                    cov[i, j] = 2.5 * 2.5
+                '''
             print(cov[i, j], end=' ', file=cov_file)
         print(file=cov_file)
     return cov
@@ -201,7 +207,7 @@ def generate_hypothesis_data():
     mean_var_arrays = {}
     var_var_arrays = {}
     start_logNFFT = 8
-    end_logNFFT = 15 #change start and end_logNFFT to same value for homogeneous sensors
+    end_logNFFT = 8 #change start and end_logNFFT to same value for homogeneous sensors
     models = {}
     predictions= {}
     delmean = {}
@@ -215,11 +221,11 @@ def generate_hypothesis_data():
         # df = df.drop(df.index[18])
         # df = df.drop(df.index[17])
 
-        print(df)
+        print('check point 1\n', df)
 
         # try:
         X = np.log10(df['distance'] * 1000 + 0.5)
-        print(X)
+        print('check point 2\n', X)
         # except:
         #     X = np.log2(0.0001)
         y = df['meanvalues' + str(NFFT)]
@@ -230,7 +236,8 @@ def generate_hypothesis_data():
         positivedelvalues = [delvalue for delvalue in delta if delvalue > 0]
         print(delta, positivedelvalues)
         delmean[NFFT] = np.mean(np.array(positivedelvalues))
-
+    
+    print('check point 3\n', df)
     cov = compute_cov(df)
 
     sensor_locations = random.sample(range(length * length), number_of_sensors)
@@ -248,9 +255,10 @@ def generate_hypothesis_data():
         print(xloc, yloc, math.sqrt(cov[sensorNum, sensorNum]), energy_cost[int(np.log2(sensor_config) + 0.5)
                                                        - start_logNFFT], file=sensor_file)
 
-    print(sensor_configs)
+    print('check point 4\n', sensor_configs)
+    print('check point 5\n', delmean)
     file_handle = open('hypothesis', 'w')
-    distance_unit = 5 #increase this to make the means smaller; affects very quickly
+    distance_unit = 4 #increase this to make the means larger; affects very quickly
     for trans_i in range(0, length):
         for trans_j in range(0, length):
             for sensorNum in range(len(sensor_locations)):
@@ -262,11 +270,10 @@ def generate_hypothesis_data():
                     distance = 0.5
                 transmitter_power = df['meanvalues' + str(sensor_configs[sensorNum])].max()
 
-                actual_power = transmitter_power - delmean[256] * np.log10(distance) / distance_unit
+                actual_power = transmitter_power - delmean[sensor_configs[sensorNum]] * np.log10(distance) / distance_unit
                 if (actual_power < 0):
                     actual_power = 0
-
-                print(trans_i, trans_j, xloc, yloc, actual_power, sensor_configs[sensorNum], file=file_handle)
+                print(trans_i, trans_j, xloc, yloc, actual_power, math.sqrt(cov[sensorNum][sensorNum]), file=file_handle)
 
         #models[NFFT] = sm.OLS(y, X).fit()
         # predictions[NFFT] = models[NFFT].predict(X)
@@ -325,8 +332,8 @@ def plot_histogram(filename):
 
 import glob
 
-length = 64  # change number of cells
-number_of_sensors = 1000  # change number of sensors
+length = 16  # change number of cells
+number_of_sensors = 100  # change number of sensors
 
 #for filename in glob.iglob('*.iq'):
 #    plot_histogram(filename)

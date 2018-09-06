@@ -1,0 +1,36 @@
+Computed covariance!
+Wrote profile results to select_sensor.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 6.44892 s
+File: select_sensor.py
+Function: o_t_approximate at line 387
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   387                                               @profile
+   388                                               def o_t_approximate(self, subset_index):
+   389                                                   '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
+   390                                                   Attributes:
+   391                                                       subset_index (list): a subset of sensors T, needs guarantee sorted
+   392                                                   '''
+   393         1          5.0      5.0      0.0          if not subset_index:  # empty sequence are false
+   394                                                       return -99999999999.
+   395         1         82.0     82.0      0.0          sub_cov = self.covariance_sub(subset_index)
+   396         1        865.0    865.0      0.0          sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
+   397         1          1.0      1.0      0.0          prob_error = 0                              # around 3% speed up by replacing [] to float
+   398                                           
+   399       226        145.0      0.6      0.0          for transmitter_i in self.transmitters:
+   400       225        157.0      0.7      0.0              i_x, i_y = transmitter_i.x, transmitter_i.y
+   401       225       1050.0      4.7      0.0              transmitter_i.set_mean_vec_sub(subset_index)
+   402       225        120.0      0.5      0.0              prob_i = 0
+   403     50850      51605.0      1.0      0.8              for transmitter_j in self.transmitters:
+   404     50625      39444.0      0.8      0.6                  j_x, j_y = transmitter_j.x, transmitter_j.y
+   405     50625      29133.0      0.6      0.5                  if i_x == j_x and i_y == j_y:
+   406       225        137.0      0.6      0.0                      continue
+   407     50400     234649.0      4.7      3.6                  transmitter_j.set_mean_vec_sub(subset_index)
+   408     50400      91748.0      1.8      1.4                  pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
+   409     50400    5999018.0    119.0     93.0                  prob_i += norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
+   410       225        759.0      3.4      0.0              prob_error += prob_i * self.grid_priori[i_x][i_y]
+   411         1          1.0      1.0      0.0          return 1 - prob_error
+

@@ -3,10 +3,13 @@
 __pycache__
 .vscode
 higherror.txt
-artificial_samples.csv
-mean_std.txt
-sensor.txt
-nohup.out
 config.json
 iq-files/*.iq
 iq-files/*.png
+iq-files2/
+iq-files/cov
+iq-files/hypothesis
+iq-files/sensors
+log*
+select_sensor.py.lprof
+data64/

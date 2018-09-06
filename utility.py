@@ -26,6 +26,15 @@ def ordered_insert(sensor_index, index):
         sensor_index.insert(size, index)
 
 
+def print_results(results):
+    '''print the results array copied from device
+    '''
+    for i in range(results.shape[0]):
+        for j in range(results[i].shape[0]):
+            print(results[i, j], end=' ')
+        print()
+
+
 if __name__ == '__main__':
     dic = read_config('config.json')
     print(dic)
