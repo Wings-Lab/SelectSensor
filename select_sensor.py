@@ -7,14 +7,13 @@ import copy
 import time
 import numpy as np
 import pandas as pd
-#import line_profiler
 from numba import cuda
 from scipy.spatial import distance
 from scipy.stats import multivariate_normal, norm, entropy
 from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
-from utility import read_config, ordered_insert, print_results
+from utility import read_config, ordered_insert#, print_results
 from it_tool import InformationTheoryTool
 #from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
@@ -273,6 +272,16 @@ class SelectSensor:
             transmitter.set_mean_vec_sub(self.subset_index)
             new_cov = self.covariance[np.ix_(self.subset_index, self.subset_index)]
             transmitter.multivariant_gaussian = multivariate_normal(mean=transmitter.mean_vec_sub, cov=new_cov)
+
+
+    def update_mean_vec_sub(self, subset_index):
+        '''Given a subset of sensors' index,
+           update each transmitter's mean vector sub
+        Attributes:
+            subset_index (list)
+        '''
+        for transmitter in self.transmitters:
+            transmitter.set_mean_vec_sub(subset_index)
 
 
     def select_offline_random(self, number, cores):
@@ -1291,6 +1300,60 @@ class SelectSensor:
         return plot_data
 
 
+    def select_online_greedy_p_2(self, budget, cores, true_index):
+        '''(Parallel version) Version 2 of online greedy selection with mutual_information version 2
+        Attributes:
+            budget (int): amount of budget, in the homo case, every sensor has budget=1
+            cores (int): number of cores used in the parallezation
+            true_index (int): the true transmitter
+        Return:
+            plot_data (list)
+        '''
+        self.set_priori()
+        plot_data = []
+        random.seed(2)
+        true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
+        print('true transmitter', true_transmitter)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        self.print_grid(self.grid_priori)
+        init_priori = [self.grid_priori[0][0]] * (self.grid_len*self.grid_len)
+        h_h = entropy(init_priori, base=2)
+        #number_hypotheses = 10*len(self.transmitters)
+        cost = 0
+        subset_to_compute = []
+        while cost < budget and complement_index:
+            #true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy_2)(subset_index, true_transmitter, h_h, candidate) \
+                                for candidate in complement_index)
+
+            best_candidate = candidate_results[0][0]
+            maximum = candidate_results[0][1]
+            for candidate in candidate_results:
+                print(candidate[2], candidate[1])
+                if candidate[1] > maximum:
+                    maximum = candidate[1]
+                    best_candidate = candidate[0]
+
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            print('MI = ', maximum)
+            h_h -= maximum
+            self.print_subset(subset_index)
+            self.update_hypothesis_2(true_transmitter, subset_index)
+            self.print_grid(self.grid_priori)
+            cost += 1
+
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
+
+        return plot_data
+
+
+
     def inner_online_greedy(self, subset_index, true_hypotheses, candidate):
         '''The inner loop for online greedy
         Attributes:
@@ -1305,6 +1368,21 @@ class SelectSensor:
         ordered_insert(subset_index2, candidate)
         mi = self.mutual_information(subset_index2, true_hypotheses)
         return (candidate, mi, subset_index2)
+
+
+    def inner_online_greedy_2(self, subset_index, true_transmitter, h_h, candidate):
+        '''The inner loop for online greedy version 2
+        Attributes:
+            subset_index (list)
+            true_transmitter (int)
+            h_h (float) the H(H) from equation #10
+        '''
+        np.random.seed(candidate)
+        subset_index2 = copy.deepcopy(subset_index)
+        ordered_insert(subset_index2, candidate)
+        mi = self.mutual_information_2(subset_index2, true_transmitter, h_h)
+        return (candidate, mi, subset_index2)
+
 
     #@profile
     def select_online_greedy(self, budget, true_index):
@@ -1347,7 +1425,7 @@ class SelectSensor:
             cost += 1
         return plot_data
 
-    @profile
+    #@profile
     def select_online_greedy_2(self, budget, true_index):
         '''The online greedy selection version 2. Homogeneous.
         Attributes:
@@ -1416,7 +1494,7 @@ class SelectSensor:
 
 
     def update_hypothesis(self, true_transmitter, subset_index):
-        '''Use Bayes formula to update P(hypothesis): form prior to posterior
+        '''Use Bayes formula to update P(hypothesis): from prior to posterior
            After we add a new sensor and get a larger subset, the larger subset begins to observe data from true transmitter
         Attributes:
             true_transmitter (Transmitter)
@@ -1444,9 +1522,9 @@ class SelectSensor:
 
 
     def update_hypothesis_2(self, true_transmitter, subset_index):
-        '''Use Bayes formula to update P(hypothesis): form prior to posterior
+        '''Use Bayes formula to update P(hypothesis): from prior to posterior
            After we add a new sensor and get a larger subset, the larger subset begins to observe data from true transmitter
-           An important update from update_hypothesis to update_hypothesis_2 is that we are not using transmitter.multivariant_gaussian. To save memory
+           An important update from update_hypothesis to update_hypothesis_2 is that we are not using attribute transmitter.multivariant_gaussian. It saves money
         Attributes:
             true_transmitter (Transmitter)
             subset_index (list)
@@ -1538,18 +1616,20 @@ class SelectSensor:
         it_tool = InformationTheoryTool(data)
         return it_tool.mutual_information(0, 1)
 
-    @profile
+    #@profile
     def mutual_information_2(self, subset_index, true_transmitter, h_h):
         '''the 2nd version of mutual information without generating data, should be faster
         Attributes:
             subset_index (list): the X_{T}
             true_transmitter (int): the true transmitter
-            h_h (float): H(h), see equation #20 in the paper
+            h_h (float): H(h), see equation #10 in the paper
         Return:
             (float) mutual information
         '''
         if not subset_index:
             return 0
+        self.update_mean_vec_sub(subset_index)
+        cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
         posterior = np.zeros(self.grid_len*self.grid_len)  # compute the entropy from the "temporary posterior grid"
         np.random.seed(true_transmitter.x*self.grid_len + true_transmitter.y)
         data = []   # the true transmitter generate some data
@@ -1558,8 +1638,6 @@ class SelectSensor:
             mean, std = self.means_stds.get((true_transmitter.x, true_transmitter.y, sensor.x, sensor.y))
             data.append(np.random.normal(mean, std))
         for trans in self.transmitters:
-            trans.set_mean_vec_sub(subset_index)
-            cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
             likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
             posterior[trans.x * self.grid_len + trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
         posterior = posterior/posterior.sum()
@@ -1591,6 +1669,40 @@ class SelectSensor:
                 tran_x, tran_y = transmitter.x, transmitter.y
                 likelihood = multivariate_gaussian.pdf(data)
                 self.grid_posterior[tran_x][tran_y] = likelihood * self.grid_priori[tran_x][tran_y]
+            #self.print_grid(self.grid_posterior)
+            max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
+            for max_post in max_posterior:  # there might be multiple places with the same highest posterior
+                if max_post[0] == true_x and max_post[1] == true_y:
+                    count = len(max_posterior)
+                    if random.randint(1, count) == 1: # when true transmitter is among the max posterior, randomly pick one
+                        success += 1
+            i += 1
+        return float(success)/test_num
+
+
+    def accuracy_2(self, subset_index, true_transmitter):
+        '''Test the accuracy of a subset of sensors when detecting the (single) true transmitter
+        Attributes:
+            subset_index (list):
+            true_transmitter (Transmitter):
+        '''
+        self.set_priori()
+        self.update_mean_vec_sub(subset_index)
+        cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
+        true_x, true_y = true_transmitter.x, true_transmitter.y
+        np.random.seed(true_x*self.sen_num + true_y)
+        test_num = 1000   # test a thousand times
+        success = 0
+        i = 0
+        while i < test_num:
+            data = []
+            for index in subset_index:
+                sensor = self.sensors[index]
+                mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
+                data.append(np.random.normal(mean, std))
+            for trans in self.transmitters:
+                likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
+                self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
             #self.print_grid(self.grid_posterior)
             max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
             for max_post in max_posterior:  # there might be multiple places with the same highest posterior
@@ -1638,6 +1750,13 @@ class SelectSensor:
         '''The inner loop for online random
         '''
         accuracy = self.accuracy(subset_index, true_transmitter)
+        return (subset_index, accuracy)
+
+
+    def inner_online_accuracy_2(self, true_transmitter, subset_index):
+        '''The inner loop for online random
+        '''
+        accuracy = self.accuracy_2(subset_index, true_transmitter)
         return (subset_index, accuracy)
 
 
@@ -1958,6 +2077,7 @@ def main():
     #plot_data = selectsensor.select_online_greedy_p(4, 4, 250)
     #plot_data = selectsensor.select_online_greedy(3, 250)
     plot_data = selectsensor.select_online_greedy_2(3, 250)
+    #plot_data = selectsensor.select_online_greedy_p_2(3, 4, 250)
     print('time:', time.time()-start)
     #plots.save_data_(plot_data, 'plot_data32/Online_Greedy_v2.csv')
 
