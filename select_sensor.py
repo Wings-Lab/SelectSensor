@@ -1618,7 +1618,7 @@ class SelectSensor:
 
     #@profile
     def mutual_information_2(self, subset_index, true_transmitter, h_h):
-        '''the 2nd version of mutual information without generating data, should be faster
+        '''the 2nd version of mutual information without generating data many many times. just generate data once in the Bayes formula
         Attributes:
             subset_index (list): the X_{T}
             true_transmitter (int): the true transmitter
@@ -1628,8 +1628,6 @@ class SelectSensor:
         '''
         if not subset_index:
             return 0
-        self.update_mean_vec_sub(subset_index)
-        cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
         posterior = np.zeros(self.grid_len*self.grid_len)  # compute the entropy from the "temporary posterior grid"
         np.random.seed(true_transmitter.x*self.grid_len + true_transmitter.y)
         data = []   # the true transmitter generate some data
@@ -1637,13 +1635,16 @@ class SelectSensor:
             sensor = self.sensors[index]
             mean, std = self.means_stds.get((true_transmitter.x, true_transmitter.y, sensor.x, sensor.y))
             data.append(np.random.normal(mean, std))
+
+        cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
         for trans in self.transmitters:
+            trans.set_mean_vec_sub(subset_index)
             likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
             posterior[trans.x * self.grid_len + trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
         posterior = posterior/posterior.sum()
         return h_h - entropy(posterior, base=2)
 
-
+    #@profile
     def accuracy(self, subset_index, true_transmitter):
         '''Test the accuracy of a subset of sensors when detecting the (single) true transmitter
         Attributes:
@@ -1654,43 +1655,9 @@ class SelectSensor:
         self.subset_index = subset_index
         self.update_transmitters()
         true_x, true_y = true_transmitter.x, true_transmitter.y
-        np.random.seed(true_x*self.sen_num + true_y)
-        test_num = 1000   # test a thousand times
-        success = 0
-        i = 0
-        while i < test_num:
-            data = []
-            for index in subset_index:
-                sensor = self.sensors[index]
-                mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
-                data.append(np.random.normal(mean, std))
-            for transmitter in self.transmitters:
-                multivariate_gaussian = transmitter.multivariant_gaussian
-                tran_x, tran_y = transmitter.x, transmitter.y
-                likelihood = multivariate_gaussian.pdf(data)
-                self.grid_posterior[tran_x][tran_y] = likelihood * self.grid_priori[tran_x][tran_y]
-            #self.print_grid(self.grid_posterior)
-            max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
-            for max_post in max_posterior:  # there might be multiple places with the same highest posterior
-                if max_post[0] == true_x and max_post[1] == true_y:
-                    count = len(max_posterior)
-                    if random.randint(1, count) == 1: # when true transmitter is among the max posterior, randomly pick one
-                        success += 1
-            i += 1
-        return float(success)/test_num
-
-
-    def accuracy_2(self, subset_index, true_transmitter):
-        '''Test the accuracy of a subset of sensors when detecting the (single) true transmitter
-        Attributes:
-            subset_index (list):
-            true_transmitter (Transmitter):
-        '''
-        self.set_priori()
-        self.update_mean_vec_sub(subset_index)
-        cov_sub = self.covariance[np.ix_(subset_index, subset_index)]
-        true_x, true_y = true_transmitter.x, true_transmitter.y
-        np.random.seed(true_x*self.sen_num + true_y)
+        seed = true_x*self.grid_len + true_y
+        np.random.seed(seed)
+        random.seed(seed)
         test_num = 1000   # test a thousand times
         success = 0
         i = 0
@@ -1701,7 +1668,7 @@ class SelectSensor:
                 mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
                 data.append(np.random.normal(mean, std))
             for trans in self.transmitters:
-                likelihood = multivariate_normal(mean=trans.mean_vec_sub, cov=cov_sub).pdf(data)
+                likelihood = trans.multivariant_gaussian.pdf(data)
                 self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
             #self.print_grid(self.grid_posterior)
             max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
@@ -1750,13 +1717,6 @@ class SelectSensor:
         '''The inner loop for online random
         '''
         accuracy = self.accuracy(subset_index, true_transmitter)
-        return (subset_index, accuracy)
-
-
-    def inner_online_accuracy_2(self, true_transmitter, subset_index):
-        '''The inner loop for online random
-        '''
-        accuracy = self.accuracy_2(subset_index, true_transmitter)
         return (subset_index, accuracy)
 
 
@@ -2073,13 +2033,13 @@ def main():
     selectsensor.read_init_sensor('data/sensor.txt')
     selectsensor.read_mean_std('data/mean_std.txt')
     selectsensor.compute_multivariant_gaussian('data/artificial_samples.csv')
-    start = time.time()
-    #plot_data = selectsensor.select_online_greedy_p(4, 4, 250)
+
     #plot_data = selectsensor.select_online_greedy(3, 250)
-    plot_data = selectsensor.select_online_greedy_2(3, 250)
-    #plot_data = selectsensor.select_online_greedy_p_2(3, 4, 250)
+    #plot_data = selectsensor.select_online_greedy_2(3, 250)
+    start = time.time()
+    plot_data = selectsensor.select_online_greedy_p_2(3, 4, 250)
     print('time:', time.time()-start)
-    #plots.save_data_(plot_data, 'plot_data32/Online_Greedy_v2.csv')
+    plots.save_data(plot_data, 'plot_data16/Online_Greedy_v2_.csv')
 
     #print('cpu  o_t:', selectsensor.o_t([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     #print('cuda o_t:', selectsensor.o_t_host(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])))
