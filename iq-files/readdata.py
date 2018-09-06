@@ -175,8 +175,6 @@ def process_iq(filename, NFFT):
 import random as rand
 
 def compute_cov(df):
-    length = 30 #length and width of grid
-    number_of_sensors = 100 #change this to add or reduce sensors
     print(df['stdvalues'])
     cov = np.zeros((number_of_sensors, number_of_sensors))
     cov_file = open('cov', 'w')
@@ -185,10 +183,10 @@ def compute_cov(df):
         for j in range(number_of_sensors):
             if (i == j):
                 cov[i, j] = df['stdvalues'].iloc[random.randint(0, 10)] ** 2
-                if cov[i, j] < 1.5 * 1.5: #lower limit of std dev
-                    cov[i, j] = 1.5 * 1.5
-                elif cov[i, j] > 2.5 * 2.5: # upper limit of std dev
-                    cov[i, j] = 2.5 * 2.5
+                # if cov[i, j] < 1.5 * 1.5: #lower limit of std dev
+                #     cov[i, j] = 1.5 * 1.5
+                # elif cov[i, j] > 2.5 * 2.5: # upper limit of std dev
+                #     cov[i, j] = 2.5 * 2.5
             print(cov[i, j], end=' ', file=cov_file)
         print(file=cov_file)
     return cov
@@ -203,7 +201,7 @@ def generate_hypothesis_data():
     mean_var_arrays = {}
     var_var_arrays = {}
     start_logNFFT = 8
-    end_logNFFT = 14 #change start and end_logNFFT to same value for homogeneous sensors
+    end_logNFFT = 15 #change start and end_logNFFT to same value for homogeneous sensors
     models = {}
     predictions= {}
     delmean = {}
@@ -235,8 +233,6 @@ def generate_hypothesis_data():
 
     cov = compute_cov(df)
 
-    length = 30 #change number of cells
-    number_of_sensors = 100 #change number of sensors
     sensor_locations = random.sample(range(length * length), number_of_sensors)
     sensor_configs = [2 ** random.randrange(start_logNFFT, end_logNFFT + 1) for i in range(len(sensor_locations))]
     sensor_file = open('sensors', 'w')
@@ -328,6 +324,9 @@ def plot_histogram(filename):
     plt.savefig(filename + '.png')
 
 import glob
+
+length = 64  # change number of cells
+number_of_sensors = 1000  # change number of sensors
 
 #for filename in glob.iglob('*.iq'):
 #    plot_histogram(filename)
