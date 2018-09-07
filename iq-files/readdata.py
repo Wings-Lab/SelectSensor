@@ -175,9 +175,6 @@ def process_iq(filename, NFFT):
 import random as rand
 
 def compute_cov(df):
-    length = 64              # change length and width of grid
-    number_of_sensors = 1000 # change this to add or reduce sensors
-    print('caitao\n', df['stdvalues'])
     cov = np.zeros((number_of_sensors, number_of_sensors))
     cov_file = open('cov', 'w')
     print (len(df))
@@ -194,6 +191,26 @@ def compute_cov(df):
             print(cov[i, j], end=' ', file=cov_file)
         print(file=cov_file)
     return cov
+
+def compute_cov_2(df, cov_filename):
+    cov = np.zeros((number_of_sensors, number_of_sensors))
+    cov_file = open(cov_filename, 'w')
+    print (len(df))
+    for i in range(number_of_sensors):
+        for j in range(number_of_sensors):
+            if (i == j):
+                cov[i, j] = df['stdvalues'].iloc[random.randint(0, len(df)-1)] ** 2
+                '''
+                if cov[i, j] < 1.5 * 1.5: #lower limit of std dev
+                    cov[i, j] = 1.5 * 1.5
+                elif cov[i, j] > 2.5 * 2.5: # upper limit of std dev
+                    cov[i, j] = 2.5 * 2.5
+                '''
+            print(cov[i, j], end=' ', file=cov_file)
+        print(file=cov_file)
+    return cov
+
+
 rand.seed(1)
 
 def generate_hypothesis_data():
@@ -223,7 +240,7 @@ def generate_hypothesis_data():
 
         # try:
         X = np.log10(df['distance'] * 1000 + 0.5)
-        print('check point 2\n', X)
+        #print('check point 2\n', X)
         # except:
         #     X = np.log2(0.0001)
         y = df['meanvalues' + str(NFFT)]
@@ -235,11 +252,9 @@ def generate_hypothesis_data():
         print(delta, positivedelvalues)
         delmean[NFFT] = np.mean(np.array(positivedelvalues))
     
-    print('check point 3\n', df)
+    #print('check point 3\n', df)
     cov = compute_cov(df)
 
-    length = 64              # change number of cells
-    number_of_sensors = 1000 # change number of sensors
     sensor_locations = random.sample(range(length * length), number_of_sensors)
     sensor_configs = [2 ** random.randrange(start_logNFFT, end_logNFFT + 1) for i in range(len(sensor_locations))]
     sensor_file = open('sensors', 'w')
@@ -255,8 +270,8 @@ def generate_hypothesis_data():
         print(xloc, yloc, math.sqrt(cov[sensorNum, sensorNum]), energy_cost[int(np.log2(sensor_config) + 0.5)
                                                        - start_logNFFT], file=sensor_file)
 
-    print('check point 4\n', sensor_configs)
-    print('check point 5\n', delmean)
+    #print('check point 4\n', sensor_configs)
+    #print('check point 5\n', delmean)
     file_handle = open('hypothesis', 'w')
     distance_unit = 4 #increase this to make the means larger; affects very quickly
     for trans_i in range(0, length):
@@ -330,12 +345,160 @@ def plot_histogram(filename):
 
     plt.savefig(filename + '.png')
 
+
+def generate_hypothesis_data_2(cov_file, sensors_file, hypothesis_file):
+    df1 = convert_locations_to_filenames()
+    df2 = list_iq_files()
+    df = merge_dfs(df1, df2)
+    df = df.reset_index()
+    #print (df)
+    mean_var_arrays = {}
+    var_var_arrays = {}
+    start_logNFFT = 8
+    end_logNFFT = 8 #change start and end_logNFFT to same value for homogeneous sensors
+    models = {}
+    predictions= {}
+    delmean = {}
+    for logNFFT in range(start_logNFFT, end_logNFFT + 1):
+        NFFT = 2 ** logNFFT
+        df['meanvalues' + str(NFFT)] = [np.mean(process_iq(filename, NFFT)) for filename in df.filename]
+        if (end_logNFFT == logNFFT):
+            df['stdvalues'] = [np.std(process_iq(filename, NFFT)) for filename in df.filename]
+
+        X = np.log10(df['distance'] * 1000 + 0.5)
+        y = df['meanvalues' + str(NFFT)]
+        #print (X, y)
+        delta = [(df['meanvalues' + str(NFFT)][i] - df['meanvalues' + str(NFFT)][i - 1]) /
+                 (X[i] - X[i - 1]) for i in range(1, len(df))]
+        delta = [delvalue if delvalue > 0 else 0 for delvalue in delta ]
+        positivedelvalues = [delvalue for delvalue in delta if delvalue > 0]
+        #print(delta, positivedelvalues)
+        delmean[NFFT] = np.mean(np.array(positivedelvalues))
+
+    cov = compute_cov_2(df, cov_file)
+
+    sensor_locations = random.sample(range(length * length), number_of_sensors)
+    sensor_configs = [2 ** random.randrange(start_logNFFT, end_logNFFT + 1) for i in range(len(sensor_locations))]
+    sensor_file = open(sensors_file, 'w')
+    energy_cost = np.array([2.9935, 2.9799, 3.0657, 3.2532, 3.5475, 4.0937, 5.1648, 7.6977])
+    energy_cost_max = np.max(energy_cost)
+    energy_cost = np.array([cost / energy_cost_max for cost in energy_cost])
+
+    for sensorNum in range(len(sensor_locations)):
+        sensor = sensor_locations[sensorNum]
+        yloc = sensor // length
+        xloc = sensor % length
+        sensor_config = sensor_configs[sensorNum]
+        print(xloc, yloc, math.sqrt(cov[sensorNum, sensorNum]), energy_cost[int(np.log2(sensor_config) + 0.5)
+                                                       - start_logNFFT], file=sensor_file)
+
+    file_handle = open(hypothesis_file, 'w')
+    distance_unit = 4 #increase this to make the means larger; affects very quickly
+    for trans_i in range(0, length):
+        for trans_j in range(0, length):
+            for sensorNum in range(len(sensor_locations)):
+                sensor = sensor_locations[sensorNum]
+                yloc = sensor // length
+                xloc = sensor % length
+                distance = math.sqrt((xloc - trans_i)**2 + (yloc - trans_j)**2)
+                if (distance == 0):
+                    distance = 0.5
+                transmitter_power = df['meanvalues' + str(sensor_configs[sensorNum])].max()
+
+                actual_power = transmitter_power - delmean[sensor_configs[sensorNum]] * np.log10(distance) / distance_unit
+                if (actual_power < 0):
+                    actual_power = 0
+                print(trans_i, trans_j, xloc, yloc, actual_power, math.sqrt(cov[sensorNum][sensorNum]), file=file_handle)
+
+
 import glob
+
+
+print(16, 100)
+length = 16              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl16_s100/cov', 'gl16_s100/sensors', 'gl16_s100/hypothesis')
+
+print(24, 100)
+length = 24              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl24_s100/cov', 'gl24_s100/sensors', 'gl24_s100/hypothesis')
+
+print(32, 50)
+length = 32              # change number of cells
+number_of_sensors = 50  # change number of sensors
+generate_hypothesis_data_2('gl32_s50/cov', 'gl32_s50/sensors', 'gl32_s50/hypothesis')
+
+print(32, 100)
+length = 32              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl32_s100/cov', 'gl32_s100/sensors', 'gl32_s100/hypothesis')
+
+print(32, 200)
+length = 32              # change number of cells
+number_of_sensors = 200  # change number of sensors
+generate_hypothesis_data_2('gl32_s200/cov', 'gl32_s200/sensors', 'gl32_s200/hypothesis')
+
+print(32, 200)
+length = 32              # change number of cells
+number_of_sensors = 300  # change number of sensors
+generate_hypothesis_data_2('gl32_s300/cov', 'gl32_s300/sensors', 'gl32_s300/hypothesis')
+
+print(32, 400)
+length = 32              # change number of cells
+number_of_sensors = 400  # change number of sensors
+generate_hypothesis_data_2('gl32_s400/cov', 'gl32_s400/sensors', 'gl32_s400/hypothesis')
+
+print(32, 500)
+length = 32              # change number of cells
+number_of_sensors = 500  # change number of sensors
+generate_hypothesis_data_2('gl32_s500/cov', 'gl32_s500/sensors', 'gl32_s500/hypothesis')
+
+print(32, 600)
+length = 32              # change number of cells
+number_of_sensors = 600  # change number of sensors
+generate_hypothesis_data_2('gl32_s600/cov', 'gl32_s600/sensors', 'gl32_s600/hypothesis')
+
+print(32, 700)
+length = 32              # change number of cells
+number_of_sensors = 700  # change number of sensors
+generate_hypothesis_data_2('gl32_s700/cov', 'gl32_s700/sensors', 'gl32_s700/hypothesis')
+
+print(32, 800)
+length = 32              # change number of cells
+number_of_sensors = 800  # change number of sensors
+generate_hypothesis_data_2('gl32_s800/cov', 'gl32_s800/sensors', 'gl32_s800/hypothesis')
+
+print(32, 900)
+length = 32              # change number of cells
+number_of_sensors = 900  # change number of sensors
+generate_hypothesis_data_2('gl32_s900/cov', 'gl32_s900/sensors', 'gl32_s900/hypothesis')
+
+print(32, 1000)
+length = 32              # change number of cells
+number_of_sensors = 1000  # change number of sensors
+generate_hypothesis_data_2('gl32_s1000/cov', 'gl32_s1000/sensors', 'gl32_s1000/hypothesis')
+
+print(40, 100)
+length = 40              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl40_s100/cov', 'gl40_s100/sensors', 'gl40_s100/hypothesis')
+
+print(48, 100)
+length = 48              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl48_s100/cov', 'gl48_s100/sensors', 'gl48_s100/hypothesis')
+
+print(56, 100)
+length = 56              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl56_s100/cov', 'gl56_s100/sensors', 'gl56_s100/hypothesis')
+
+print(64, 100)
+length = 64              # change number of cells
+number_of_sensors = 100  # change number of sensors
+generate_hypothesis_data_2('gl64_s100/cov', 'gl64_s100/sensors', 'gl64_s100/hypothesis')
 
 #for filename in glob.iglob('*.iq'):
 #    plot_histogram(filename)
-
-generate_hypothesis_data()
-
-
 
