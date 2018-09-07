@@ -13,3 +13,4 @@ iq-files/sensors
 log*
 select_sensor.py.lprof
 data64/
+scalability/
