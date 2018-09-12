@@ -1333,31 +1333,45 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        init_priori = [self.grid_priori[0][0]] * (self.grid_len*self.grid_len)
-        h_h = entropy(init_priori, base=2)
+        discretize_x = self.discretize(bin_num=100)
         cost = 0
 
         while cost < budget and complement_index:
-            maximum = self.mutual_information_2(subset_index, true_transmitter, h_h)
+            maximum = self.mutual_information_2(discretize_x, complement_index[0])
             best_candidate = complement_index[0]
             for candidate in complement_index:
-                ordered_insert(subset_index, candidate)
-                mi = self.mutual_information_2(subset_index, true_transmitter, h_h)
-                print(subset_index, 'MI =', mi)
+                mi = self.mutual_information_2(discretize_x, candidate)
+                print(candidate, 'MI =', mi)
                 if mi > maximum:
                     maximum = mi
                     best_candidate = candidate
-                subset_index.remove(candidate)
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
             plot_data.append([str(subset_index), len(subset_index), maximum])
             print('MI = ', maximum)
-            h_h -= maximum
             self.print_subset(subset_index)
-            self.update_hypothesis_2(true_transmitter, subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
             self.print_grid(self.grid_priori)
             cost += 1
         return plot_data
+
+
+    def discretize(self, bin_num=100):
+        '''Discretize the likelihood of data P(X|h) for each hypothesis
+        Parameters:
+            bin (int): bin size, discretize the X axis into bin # of bins
+        Return:
+            (numpy.ndarray): n = 3
+        '''
+        discretize_x = np.zeros((len(self.sensors), len(self.transmitters), bin_num))
+        for sensor in self.sensors:
+            for trans in self.transmitters:
+                mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
+                X = np.linspace(mean - 3*std, mean + 3*std, bin_num+1)
+                cdf = norm.cdf(X, mean, std)
+                for i in range(bin_num):
+                    discretize_x[sensor.index, trans.hypotheis, i] = cdf[i + 1] - cdf[i]
+        return discretize_x
 
 
     def print_subset(self, subset_index):
@@ -1476,6 +1490,24 @@ class SelectSensor:
             posterior[trans.x * self.grid_len + trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
         posterior = posterior/posterior.sum()
         return h_h - entropy(posterior, base=2)
+
+
+    def mutual_information_2(self, discretize_x, sensor_index):
+        '''mutual information version 2
+        '''
+        summation = 0
+        for trans in self.transmitters:
+            hypothesis = trans.hypothesis
+            prob_x = 0
+            for i in discretize_x[sensor_index, hypothesis]:
+                x = sensor_index // self.grid_len
+                y = sensor_index % self.grid_len
+                prob_x += i * self.grid_priori[x, y]
+            for i in discretize_x[sensor_index, hypothesis]:
+                x = sensor_index // self.grid_len
+                y = sensor_index % self.grid_len
+                summation += i * self.grid_priori[x, y] * math.log2(i/prob_x)
+        return summation
 
 
     #@profile
@@ -1608,6 +1640,7 @@ class SelectSensor:
         np.random.seed(2)
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
+        self.print_grid(self.grid_priori)
 
         center = (int(self.grid_len/2), int(self.grid_len/2))
         min_dis = 99999
@@ -1628,9 +1661,10 @@ class SelectSensor:
         cost = 1
 
         while cost < budget and complement_index:
-            distances = self.nearest_weighted_distance(complement_index)
-
-            min_distances = np.argwhere(distances == np.amin(distances))  # there could be multiple min distances
+            distances = self.weighted_distance_priori(complement_index)
+            #print(distances)
+            min_distances = np.argwhere(distances == np.amax(distances))  # there could be multiple max distances
+            #print(min_distances)
             select = random.choice(min_distances)[0]
             index_nearest = complement_index[select]
 
@@ -1650,8 +1684,8 @@ class SelectSensor:
         return plot_data
 
 
-    def nearest_weighted_distance(self, complement_index):
-        '''Compute the weighted distance according to the priori distribution for every sensor in
+    def weighted_distance_priori(self, complement_index):
+        '''Compute the weighted distance priori according to the priori distribution for every sensor in
            the complement index list and return the all the distances
         Attributes:
             complement_index (list)
@@ -1664,7 +1698,9 @@ class SelectSensor:
             weighted_distance = 0
             for transmitter in self.transmitters:
                 tran_x, tran_y = transmitter.x, transmitter.y
-                weighted_distance += distance.euclidean([sensor.x, sensor.y], [tran_x, tran_y]) * self.grid_priori[tran_x][tran_y]
+                dist = distance.euclidean([sensor.x, sensor.y], [tran_x, tran_y])
+                dist = dist if dist >= 1 else 0.5
+                weighted_distance += 1/dist * self.grid_priori[tran_x][tran_y]
             distances.append(weighted_distance)
         return np.array(distances)
 
@@ -1712,14 +1748,14 @@ class SelectSensor:
 
         while cost < budget and complement_index:
             print(cost, budget)
-            distances = self.nearest_weighted_distance(complement_index)
-            min_dist_cost = distances[0] * self.sensors[complement_index[0]].cost
+            distances = self.weighted_distance_priori(complement_index)
+            max_dist_cost = distances[0] / self.sensors[complement_index[0]].cost
             best_candidate = complement_index[0]
             for dist, sen_index in zip(distances, complement_index):
                 sen_cost = self.sensors[sen_index].cost
-                dist_cost = dist * sen_cost
-                if dist_cost < min_dist_cost:
-                    min_dist_cost = dist_cost
+                dist_cost = dist / sen_cost
+                if dist_cost > max_dist_cost:
+                    max_dist_cost = dist_cost
                     best_candidate = sen_index
 
             ordered_insert(subset_index, best_candidate)
@@ -1851,7 +1887,7 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2a(selectsensor)
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))

@@ -67,14 +67,14 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_nearest(20, 48, 1000)
+    plot_data = selectsensor.select_online_nearest(10, 4, 250)
     save_data(plot_data, 'plot_data64/Online_Nearest.csv')
 
-    plot_data = selectsensor.select_online_random(30, 48, 1000)
-    save_data(plot_data, 'plot_data64/Online_Random.csv')
+    #plot_data = selectsensor.select_online_random(30, 48, 1000)
+    #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
-    plot_data = selectsensor.select_online_greedy_p(10, 48, 1000)
-    save_data(plot_data, 'plot_data64/Online_Greedy.csv')
+    #plot_data = selectsensor.select_online_greedy_p(10, 48, 1000)
+    #save_data(plot_data, 'plot_data64/Online_Greedy.csv')
 
 
 def figure_2b(selectsensor):
