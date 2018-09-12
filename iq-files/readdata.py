@@ -413,6 +413,12 @@ def generate_hypothesis_data_2(cov_file, sensors_file, hypothesis_file):
 
 import glob
 
+
+
+length = 16              # change number of cells
+number_of_sensors = 40  # change number of sensors
+generate_hypothesis_data()
+
 '''
 print(16, 100)
 length = 16              # change number of cells
@@ -504,12 +510,14 @@ length = 72              # change number of cells
 number_of_sensors = 100  # change number of sensors
 generate_hypothesis_data_2('gl72_s100/cov', 'gl72_s100/sensors', 'gl72_s100/hypothesis')
 
-'''
-
 print(80, 100)
 length = 80              # change number of cells
 number_of_sensors = 100  # change number of sensors
 generate_hypothesis_data_2('gl80_s100/cov', 'gl80_s100/sensors', 'gl80_s100/hypothesis')
+
+
+'''
+
 
 #for filename in glob.iglob('*.iq'):
 #    plot_histogram(filename)

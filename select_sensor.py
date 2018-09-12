@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config, ordered_insert#, print_results
-from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
+#from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
 
 
@@ -96,8 +96,8 @@ class SelectSensor:
                 mean_vec.append(mean_std[0])
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
-        self.transmitters_to_array()
-        del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
+        #self.transmitters_to_array() # for GPU
+        #del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -1371,7 +1371,7 @@ class SelectSensor:
                 X = np.linspace(mean - 3*std, mean + 3*std, bin_num+1)
                 cdf = norm.cdf(X, mean, std)
                 for i in range(bin_num):
-                    discretize_x[sensor.index, trans.hypotheis, i] = cdf[i + 1] - cdf[i]
+                    discretize_x[sensor.index, trans.hypothesis, i] = cdf[i + 1] - cdf[i]
         return discretize_x
 
 
@@ -1957,8 +1957,8 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2a(selectsensor)
+    selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    selectsensor.select_online_greedy(4, 250)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
     #selectsensor.scalability_hypothesis([16, 24, 32, 40, 48]) 
