@@ -14,3 +14,4 @@ iq-files/gl*
 log*
 select_sensor.py.lprof
 data64/
+scalability/gl*

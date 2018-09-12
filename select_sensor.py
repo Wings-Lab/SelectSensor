@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 from sensor import Sensor
 from transmitter import Transmitter
 from utility import read_config, ordered_insert#, print_results
-#from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
+from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
 
 
@@ -78,6 +78,7 @@ class SelectSensor:
                 index += 1
 
         with open(hypothesis_file, 'r') as f:
+            self.means_stds = {}
             lines = f.readlines()
             for line in lines:
                 line = line.split(' ')
@@ -96,7 +97,7 @@ class SelectSensor:
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
-        #del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
+        del self.means_stds  # in 64*64 grid offline case, need to delete means_stds and comment multivariant_gaussian to save memory. otherwise exceed 4GB limit of joblib
         print('init done!')
 
 
@@ -111,6 +112,7 @@ class SelectSensor:
     def init_transmitters(self):
         '''Initiate a transmitter at all locations
         '''
+        self.transmitters = []
         for i in range(self.grid_len):
             for j in range(self.grid_len):
                 transmitter = Transmitter(i, j)
@@ -152,7 +154,7 @@ class SelectSensor:
 
     def read_init_sensor(self, filename):
         '''Read location of sensors and init the sensors
-        Attributes:
+        Parameters:
             filename (str)
         '''
         self.sensors = []
@@ -170,7 +172,7 @@ class SelectSensor:
     def save_mean_std(self, filename):
         '''Save the mean and std of each transmitter-sensor pair.
            Mean is computed by f(x) = 100 - 30*math.log(2*dist)
-        Attributes:
+        Parameters:
             filename (str)
         '''
         with open(filename, 'w') as f:
@@ -187,7 +189,7 @@ class SelectSensor:
 
     def read_mean_std(self, filename):
         '''read mean std information between transmitters and sensors
-        Attributes:
+        Parameters:
             filename (str)
         '''
         with open(filename, 'r') as f:
@@ -203,7 +205,7 @@ class SelectSensor:
     def generate_data(self, sample_file):
         '''Since we don't have the real data yet, we make up some artificial data according to mean_std.txt
            Then save them in a csv file. also save the mean vector
-        Attributes:
+        Parameters:
             sample_file (str): filename for artificial sample
             mean_vec_file (str): filename for mean vector, the mean vector computed from sampled data
         '''
@@ -227,7 +229,7 @@ class SelectSensor:
         '''Read data and mean vectors, then compute the guassian function by using the data
            Each hypothesis corresponds to a single gaussian function
            with different mean but the same covariance.
-        Attributes:
+        Parameters:
             sample_file (str)
             mean_vec_file (str)
         '''
@@ -254,7 +256,7 @@ class SelectSensor:
 
     def update_subset(self, subset_index):
         '''Given a list of sensor indexes, which represents a subset of sensors, update self.subset
-        Attributes:
+        Parameters:
             subset_index (list): a list of sensor indexes. guarantee sorted
         '''
         self.subset = []
@@ -276,7 +278,7 @@ class SelectSensor:
     def update_mean_vec_sub(self, subset_index):
         '''Given a subset of sensors' index,
            update each transmitter's mean vector sub
-        Attributes:
+        Parameters:
             subset_index (list)
         '''
         for transmitter in self.transmitters:
@@ -285,7 +287,7 @@ class SelectSensor:
 
     def select_offline_random(self, number, cores):
         '''Select a subset of sensors randomly
-        Attributes:
+        Parameters:
             number (int): number of sensors to be randomly selected
             cores (int): number of cores for parallelization
         Return:
@@ -324,7 +326,7 @@ class SelectSensor:
 
     def covariance_sub(self, subset_index):
         '''Given a list of index of sensors, return the sub covariance matrix
-        Attributes:
+        Parameters:
             subset_index (list): list of index of sensors. should be sorted.
         Return:
             (np.ndarray): a 2D sub covariance matrix
@@ -335,7 +337,7 @@ class SelectSensor:
 
     def o_t_p(self, subset_index, cores):
         '''(Parallelized version of o_t function) Given a subset of sensors T, compute the O_T
-        Attributes:
+        Parameters:
             subset_index (list): a subset of sensors T, guarantee sorted
             cores (int): number of cores to do the parallel
         Return O_T
@@ -377,7 +379,7 @@ class SelectSensor:
     #@profile
     def o_t(self, subset_index):
         '''Given a subset of sensors T, compute the O_T
-        Attributes:
+        Parameters:
             subset_index (list): a subset of sensors T, guarantee sorted
         Return O_T
         '''
@@ -403,7 +405,7 @@ class SelectSensor:
 
     def o_t_approximate(self, subset_index):
         '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
-        Attributes:
+        Parameters:
             subset_index (list): a subset of sensors T, needs guarantee sorted
         '''
         if not subset_index:  # empty sequence are false
@@ -429,7 +431,7 @@ class SelectSensor:
 
     def o_t_approximate_2(self, subset_index):
         '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
-        Attributes:
+        Parameters:
             subset_index (list): a subset of sensors T, needs guarantee sorted
         '''
         if not subset_index:  # empty sequence are false
@@ -460,7 +462,7 @@ class SelectSensor:
 
     def select_offline_greedy_p(self, budget, cores):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
-        Attributes:
+        Parameters:
             budget (int): budget constraint
             cores (int): number of cores for parallelzation
         Return:
@@ -501,7 +503,7 @@ class SelectSensor:
 
     def select_offline_greedy_p_lazy(self, budget, cores, cuda_kernal=None):
         '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version
-        Attributes:
+        Parameters:
             budget (int): budget constraint
             cores (int): number of cores for parallelzation
         Return:
@@ -525,8 +527,8 @@ class SelectSensor:
         complement_sensors = copy.deepcopy(self.sensors)    # S\T in the paper
         subset_to_compute = []
         while cost < budget and complement_sensors:
-            best_candidate = -1
-            best_sensor = None
+            best_candidate = complement_sensors[0].index   # init as the first sensor
+            best_sensor = complement_sensors[0]
             complement_sensors.sort()   # sorting the gain descendingly
             new_base_ot_approx = 0
             #for sensor in complement_sensors:
@@ -551,7 +553,7 @@ class SelectSensor:
                         new_base_ot_approx = candidate_results[j][1]
 
                 if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
-                    print('\n***LAZY!***\n', cost, (update, update_end), len(complement_sensors), '\n')
+                    #print('\n***LAZY!***\n', cost, (update, update_end), len(complement_sensors), '\n')
                     break
                 update += cores
             base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
@@ -560,6 +562,8 @@ class SelectSensor:
             subset_to_compute.append(copy.deepcopy(subset_index))
             plot_data.append([len(subset_index), base_ot_approx, 0]) # don't compute real o_t now, delay to after all the subsets are selected
             complement_sensors.remove(best_sensor)
+            if base_ot_approx > 0.9999999999999:
+                break
             cost += 1
         print('number of o_t_approx', counter)
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy_real_ot)(subset_index) for subset_index in subset_to_compute)
@@ -572,7 +576,7 @@ class SelectSensor:
 
     def inner_greedy(self, subset_index, cuda_kernal, candidate):
         '''Inner loop for selecting candidates
-        Attributes:
+        Parameters:
             subset_index (list):
             candidate (int):
         Return:
@@ -587,7 +591,7 @@ class SelectSensor:
 
     def select_offline_greedy(self, budget):
         '''Select a subset of sensors greedily. offline + homo version
-        Attributes:
+        Parameters:
             budget (int): budget constraint
         Return:
             (list): an element is [str, int, float],
@@ -619,8 +623,7 @@ class SelectSensor:
 
     def select_offline_random_hetero(self, budget, cores):
         '''Offline selection when the sensors are heterogeneous
-
-        Attributes:
+        Parameters:
             budget (int): budget we have for the heterogeneous sensors
             cores (int): number of cores for parallelization
         '''
@@ -667,8 +670,7 @@ class SelectSensor:
     def select_offline_greedy_hetero(self, budget, cores):
         '''Offline selection when the sensors are heterogeneous
            Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
-
-        Attributes:
+        Parameters:
             budget (int): budget we have for the heterogeneous sensors
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
@@ -778,8 +780,7 @@ class SelectSensor:
     def select_offline_greedy_hetero_lazy(self, budget, cores):
         '''(Lazy) Offline selection when the sensors are heterogeneous
            Two pass method: first do a homo pass, then do a hetero pass, choose the best of the two
-
-        Attributes:
+        Parameters:
             budget (int): budget we have for the heterogeneous sensors
             cores (int): number of cores for parallelization
             cost_filename (str): file that has the cost of sensors
@@ -1062,7 +1063,7 @@ class SelectSensor:
 
     def compute_coverage_radius(self, first_sensor, subset_index):
         '''Compute the coverage radius for the coverage-based selection algorithm
-        Attibutes:
+        Parameters:
             first_sensor (tuple): sensor that is closest to the center
             subset_index (list):
         '''
@@ -1096,7 +1097,7 @@ class SelectSensor:
 
     def compute_overlap(self, coverage, sensor, radius):
         '''Compute the overlap between selected sensors and the new sensor
-        Attributes:
+        Parameters:
             coverage (2D array)
             sensor (Sensor)
             radius (int)
@@ -1126,7 +1127,7 @@ class SelectSensor:
 
     def add_coverage(self, coverage, sensor, radius):
         '''When seleted a sensor, add coverage by 1
-        Attributes:
+        Parameters:
             coverage (2D array): each element is a counter for coverage
             sensor (Sensor): (x, y)
             radius (int): radius of a sensor
@@ -1191,7 +1192,7 @@ class SelectSensor:
 
     def select_online_greedy_hetero(self, budget, cores, true_index):
         '''Heterogeneous version of online greedy selection
-        Attributes:
+        Parameters:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
             cost_filename (str): file that has the cost of sensors
@@ -1254,7 +1255,7 @@ class SelectSensor:
 
     def select_online_greedy_p(self, budget, cores, true_index):
         '''(Parallel version) Version 2 of online greedy selection with mutual_information version 2
-        Attributes:
+        Parameters:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
             true_index (int): the true transmitter
@@ -1305,7 +1306,7 @@ class SelectSensor:
 
     def inner_online_greedy(self, subset_index, true_transmitter, h_h, candidate):
         '''The inner loop for online greedy version 2
-        Attributes:
+        Parameters:
             subset_index (list)
             true_transmitter (int)
             h_h (float) the H(H) from equation #10
@@ -1376,7 +1377,7 @@ class SelectSensor:
 
     def print_subset(self, subset_index):
         '''Print the subset_index and its 2D location
-        Attriubtes:
+        Parameters:
             subset_index (list)
         '''
         print(subset_index, end=' ')
@@ -1403,7 +1404,7 @@ class SelectSensor:
         '''Use Bayes formula to update P(hypothesis): from prior to posterior
            After we add a new sensor and get a larger subset, the larger subset begins to observe data from true transmitter
            An important update from update_hypothesis to update_hypothesis_2 is that we are not using attribute transmitter.multivariant_gaussian. It saves money
-        Attributes:
+        Parameters:
             true_transmitter (Transmitter)
             subset_index (list)
         '''
@@ -1430,7 +1431,7 @@ class SelectSensor:
 
     def generate_true_hypotheses(self, number):
         '''Generate true hypotheses according to self.grid_priori
-        Attributes:
+        Parameters:
             number (int): the number of true hypothesis we are generating
         Return:
             (list): a list of true hypotheis
@@ -1466,7 +1467,7 @@ class SelectSensor:
     #@profile
     def mutual_information(self, subset_index, true_transmitter, h_h):
         '''the 2nd version of mutual information without generating data many many times. just generate data once in the Bayes formula
-        Attributes:
+        Parameters:
             subset_index (list): the X_{T}
             true_transmitter (int): the true transmitter
             h_h (float): H(h), see equation #10 in the paper
@@ -1513,7 +1514,7 @@ class SelectSensor:
     #@profile
     def accuracy(self, subset_index, true_transmitter):
         '''Test the accuracy of a subset of sensors when detecting the (single) true transmitter
-        Attributes:
+        Parameters:
             subset_index (list):
             true_transmitter (Transmitter):
         '''
@@ -1549,7 +1550,7 @@ class SelectSensor:
 
     def select_online_random(self, budget, cores, true_index):
         '''The online random selection
-        Attributes:
+        Parameters:
             budget (int):
             cores (int):
         '''
@@ -1588,7 +1589,7 @@ class SelectSensor:
 
     def select_online_random_hetero(self, budget, cores, true_index):
         '''The online random selection. heterogeneous version
-        Attributes:
+        Parameters:
             budget (int):
             cores (int):
             cost_filename (str):
@@ -1630,7 +1631,7 @@ class SelectSensor:
 
     def select_online_nearest(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
-        Attributes:
+        Parameters:
             budget (int):
             cores (int):
         '''
@@ -1687,7 +1688,7 @@ class SelectSensor:
     def weighted_distance_priori(self, complement_index):
         '''Compute the weighted distance priori according to the priori distribution for every sensor in
            the complement index list and return the all the distances
-        Attributes:
+        Parameters:
             complement_index (list)
         Return:
             (np.ndarray) - index
@@ -1707,7 +1708,7 @@ class SelectSensor:
 
     def select_online_nearest_hetero(self, budget, cores, true_index):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
-        Attributes:
+        Parameters:
             budget (int):
             cores (int):
         '''
@@ -1791,7 +1792,7 @@ class SelectSensor:
 
     def o_t_approx_host(self, subset_index):
         '''host code for o_t_approx.
-        Attributes:
+        Parameters:
             subset_index (np.ndarray, n=1): index of some sensors
         '''
         n_h = len(self.transmitters)   # number of hypotheses/transmitters
@@ -1816,7 +1817,7 @@ class SelectSensor:
 
     def o_t_approx_host_2(self, subset_index, cuda_kernal):
         '''host code for o_t_approx.
-        Attributes:
+        Parameters:
             subset_index (np.ndarray, n=1): index of some sensors
         '''
         n_h = len(self.transmitters)   # number of hypotheses/transmitters
@@ -1843,7 +1844,7 @@ class SelectSensor:
     #@profile
     def o_t_host(self, subset_index):
         '''host code for o_t.
-        Attributes:
+        Parameters:
             subset_index (np.ndarray, n=1): index of some sensors
         '''
         n_h = len(self.transmitters)   # number of hypotheses/transmitters
@@ -1863,6 +1864,75 @@ class SelectSensor:
 
         results = d_results.copy_to_host()
         return np.sum(results.prod(axis=1)*self.grid_priori[0][0])
+
+
+    def scalability_budget(self, budgets):
+        '''default # of hypothesis = 32^2 = 1024
+           default # of sensors = 100
+        Parameters:
+            budgets (list): a list of budgets
+        '''
+        budget_file = open('plot_data64/budget_', 'w')
+        self.grid_len = 32
+        self.sen_num = 100
+        self.init_transmitters()
+        self.set_priori()
+        self.init_from_real_data('scalability/gl32_s100/cov', 'scalability/gl32_s100/sensors', 'scalability/gl32_s100/hypothesis')
+        for budget in budgets:
+            print(budget, end=',', file=budget_file)
+            start = time.time()
+            self.select_offline_greedy_p_lazy(budget, 12, o_t_approx_kernal)
+            print(time.time()-start, end='\n', file=budget_file)
+
+
+    def scalability_hypothesis(self, grid_lens):
+        '''default # of sensors = 100
+           default budget = 40
+        Parameters:
+            grid_lens (list): a list of grid_lens
+        '''
+        cov_filename = 'scalability/glCAITAO_s100/cov'
+        sensors_filename = 'scalability/glCAITAO_s100/sensors'
+        hypothesis_filename = 'scalability/glCAITAO_s100/hypothesis'
+        hypothesis_file = open('plot_data64/hypothesis2', 'w')
+        self.sen_num = 100
+        for grid_len in grid_lens:
+            cov = cov_filename.replace('CAITAO', str(grid_len))
+            sensors = sensors_filename.replace('CAITAO', str(grid_len))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(grid_len))
+            self.grid_len = grid_len
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(grid_len*grid_len, end=',', file=hypothesis_file)
+            start = time.time()
+            self.select_offline_greedy_p_lazy(40, 6, o_t_approx_kernal)
+            print(time.time()-start, end='\n', file=hypothesis_file)
+
+
+    def scalability_sensor(self, sensor_nums):
+        '''default # of hypothesis = 32^2 = 1024
+           default budget = 40
+        Parameters:
+            sensors (list): a list of # of sensors
+        '''
+        cov_filename = 'scalability/gl32_sCAITAO/cov'
+        sensors_filename = 'scalability/gl32_sCAITAO/sensors'
+        hypothesis_filename = 'scalability/gl32_sCAITAO/hypothesis'
+        sensor_file = open('plot_data64/sensor', 'w')
+        self.grid_len = 32
+        for sensor_num in sensor_nums:
+            cov = cov_filename.replace('CAITAO', str(sensor_num))
+            sensors = sensors_filename.replace('CAITAO', str(sensor_num))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(sensor_num))
+            self.sen_num = sensor_num
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(sensor_num, end=',', file=sensor_file)
+            start = time.time()
+            self.select_offline_greedy_p_lazy(40, 12, o_t_approx_kernal)
+            print(time.time()-start, end='\n', file=sensor_file)
 
 
 def new_data():
@@ -1889,6 +1959,12 @@ def main():
     #real data
     selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2a(selectsensor)
+    #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
+    #selectsensor.scalability_budget([90])
+    #selectsensor.scalability_hypothesis([16, 24, 32, 40, 48]) 
+    #selectsensor.scalability_hypothesis([80])
+    #selectsensor.scalability_sensor([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+        
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
     #selectsensor.init_from_real_data('data2/heterogeneous/cov', 'data2/heterogeneous/sensors', 'data2/heterogeneous/hypothesis')
