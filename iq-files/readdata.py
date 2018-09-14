@@ -416,7 +416,7 @@ import glob
 
 
 length = 16              # change number of cells
-number_of_sensors = 40  # change number of sensors
+number_of_sensors = 40   # change number of sensors
 generate_hypothesis_data()
 
 '''
