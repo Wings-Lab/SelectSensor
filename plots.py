@@ -69,18 +69,18 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    start = time.time()
-    plot_data = selectsensor.select_online_nearest(24, 48, 1340)
-    print('nearest:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Nearest.csv')
+    #start = time.time()
+    #plot_data = selectsensor.select_online_nearest(24, 48, 1340)
+    #print('nearest:', time.time()-start)
+    #save_data(plot_data, 'plot_data64/Online_Nearest.csv')
+
+    #start = time.time()
+    #plot_data = selectsensor.select_online_random(144, 48, 1340)
+    #print('random:', time.time()-start)
+    #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_random(144, 48, 1340)
-    print('random:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Random.csv')
-
-    start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(12, 48, 1340)
+    plot_data = selectsensor.select_online_greedy_p(12, 19, 1340)
     print('greedy:', time.time()-start)
     save_data(plot_data, 'plot_data64/Online_Greedy.csv')
 
@@ -91,14 +91,14 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random_hetero(25, 48, 769)
-    save_data(plot_data, 'plot_data30/Online_Random_30_hetero.csv')
+    plot_data = selectsensor.select_online_random_hetero(10, 4, 250)
+    save_data(plot_data, 'plot_data32/Online_Random_hetero.csv')
 
-    plot_data = selectsensor.select_online_nearest_hetero(20, 48, 769)
-    save_data(plot_data, 'plot_data30/Online_Nearest_30_hetero.csv')
+    plot_data = selectsensor.select_online_nearest_hetero(10, 4, 250)
+    save_data(plot_data, 'plot_data32/Online_Nearest_hetero.csv')
 
-    plot_data = selectsensor.select_online_greedy_hetero(8, 48, 769)
-    save_data(plot_data, 'plot_data30/Online_Greedy_30_hetero.csv')
+    plot_data = selectsensor.select_online_greedy_hetero(6, 4, 250)
+    save_data(plot_data, 'plot_data32/Online_Greedy_hetero.csv')
 
 
 if __name__ == '__main__':

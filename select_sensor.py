@@ -86,6 +86,7 @@ class SelectSensor:
                 sen_x, sen_y = int(line[2]), int(line[3])
                 mean, std = float(line[4]), float(line[5])
                 self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
+            del lines
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
@@ -1271,7 +1272,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=1000)
+        discretize_x = self.discretize(bin_num=400)
         cost = 0
         subset_to_compute = []
         while cost < budget and complement_index:
@@ -1333,7 +1334,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=1000)
+        discretize_x = self.discretize(bin_num=400)
         cost = 0
 
         while cost < budget and complement_index:
@@ -1347,7 +1348,7 @@ class SelectSensor:
                     best_candidate = candidate
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
-            plot_data.append([str(subset_index), len(subset_index), maximum])
+            plot_data.append([str(subset_index), len(subset_index), maximum]) # TODO
             print('MI = ', maximum)
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
@@ -1957,6 +1958,7 @@ def main():
     #real data
     selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2a(selectsensor)
+    #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
     #selectsensor.scalability_hypothesis([16, 24, 32, 40, 48]) 
