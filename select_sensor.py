@@ -1526,8 +1526,11 @@ class SelectSensor:
             x = trans.hypothesis // self.grid_len
             y = trans.hypothesis % self.grid_len
             for prob_xh, prob_xi in zip(discretize_x[sensor_index, trans.hypothesis], prob_x):
-                if prob_xh != 0 and prob_xi != 0:
-                    summation += prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
+                if (prob_xh == 0 or prob_xi == 0):
+                    continue
+                term = prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
+                if (not np.isnan(term)):
+                    summation += term
         return summation
 
 
