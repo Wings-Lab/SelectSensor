@@ -2,6 +2,8 @@
 Plots
 '''
 
+import time
+
 def save_data(plot_data, file_path):
     '''Save the plot_data to file_path
     Attributes:
@@ -67,14 +69,20 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_nearest(10, 4, 250)
+    start = time.time()
+    plot_data = selectsensor.select_online_nearest(24, 48, 1340)
+    print('nearest:', time.time()-start)
     save_data(plot_data, 'plot_data64/Online_Nearest.csv')
 
-    #plot_data = selectsensor.select_online_random(30, 48, 1000)
-    #save_data(plot_data, 'plot_data64/Online_Random.csv')
+    start = time.time()
+    plot_data = selectsensor.select_online_random(144, 48, 1340)
+    print('random:', time.time()-start)
+    save_data(plot_data, 'plot_data64/Online_Random.csv')
 
-    #plot_data = selectsensor.select_online_greedy_p(10, 48, 1000)
-    #save_data(plot_data, 'plot_data64/Online_Greedy.csv')
+    start = time.time()
+    plot_data = selectsensor.select_online_greedy_p(12, 48, 1340)
+    print('greedy:', time.time()-start)
+    save_data(plot_data, 'plot_data64/Online_Greedy.csv')
 
 
 def figure_2b(selectsensor):
