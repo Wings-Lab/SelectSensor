@@ -1656,9 +1656,9 @@ class SelectSensor:
 
         while cost < budget and complement_index:
             distances = self.weighted_distance_priori(complement_index)
-            print(distances)
+            #print(distances)
             min_distances = np.argwhere(distances == np.amax(distances))  # there could be multiple max distances
-            print(min_distances)
+            #print(min_distances)
             select = random.choice(min_distances)[0]
             index_nearest = complement_index[select]
 
@@ -1956,9 +1956,7 @@ def main():
 
     #real data
     selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    start = time.time()
     plots.figure_2a(selectsensor)
-    print('time:', time.time()-start)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
     #selectsensor.scalability_hypothesis([16, 24, 32, 40, 48]) 
