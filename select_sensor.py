@@ -1334,7 +1334,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=100)
+        discretize_x = self.discretize(bin_num=1000)
         cost = 0
 
         while cost < budget and complement_index:
@@ -1357,18 +1357,30 @@ class SelectSensor:
         return plot_data
 
 
-    def discretize(self, bin_num=100):
+    def discretize(self, bin_num=1000):
         '''Discretize the likelihood of data P(X|h) for each hypothesis
         Parameters:
             bin (int): bin size, discretize the X axis into bin # of bins
         Return:
             (numpy.ndarray): n = 3
         '''
+        min_mean, max_mean, max_std = 999, -999, 0
+        for sensor in self.sensors:
+            for trans in self.transmitters:
+                mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
+                if mean < min_mean:
+                    min_mean = mean
+                elif mean > max_mean:
+                    max_mean = mean
+                if std > max_std:
+                    max_std = std
+
+        X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
+
         discretize_x = np.zeros((len(self.sensors), len(self.transmitters), bin_num))
         for sensor in self.sensors:
             for trans in self.transmitters:
                 mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
-                X = np.linspace(mean - 3*std, mean + 3*std, bin_num+1)
                 cdf = norm.cdf(X, mean, std)
                 for i in range(bin_num):
                     discretize_x[sensor.index, trans.hypothesis, i] = cdf[i + 1] - cdf[i]
@@ -1495,19 +1507,27 @@ class SelectSensor:
 
     def mutual_information_2(self, discretize_x, sensor_index):
         '''mutual information version 2
+        Parameters:
+            discretize_x (np.ndarray, n = 3): for each pair of (sensor, transmitter), discretize the gaussian distribution
+            sensor_index (int): the X_e in the paper, a candidate sensor
         '''
-        summation = 0
+        prob_x = []           # compute the probability of x
+        x_num = len(discretize_x[0, 0])
+        for i in range(x_num):
+            summation = 0
+            for trans in self.transmitters:
+                x = trans.hypothesis // self.grid_len
+                y = trans.hypothesis % self.grid_len
+                summation += discretize_x[sensor_index, trans.hypothesis, i] * self.grid_priori[x, y]
+            prob_x.append(summation)
+
+        summation = 0         # compute the mutual information
         for trans in self.transmitters:
-            hypothesis = trans.hypothesis
-            prob_x = 0
-            for i in discretize_x[sensor_index, hypothesis]:
-                x = sensor_index // self.grid_len
-                y = sensor_index % self.grid_len
-                prob_x += i * self.grid_priori[x, y]
-            for i in discretize_x[sensor_index, hypothesis]:
-                x = sensor_index // self.grid_len
-                y = sensor_index % self.grid_len
-                summation += i * self.grid_priori[x, y] * math.log2(i/prob_x)
+            x = trans.hypothesis // self.grid_len
+            y = trans.hypothesis % self.grid_len
+            for prob_xh, prob_xi in zip(discretize_x[sensor_index, trans.hypothesis], prob_x):
+                if prob_xh != 0 and prob_xi != 0:
+                    summation += prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
         return summation
 
 
