@@ -1501,7 +1501,7 @@ class SelectSensor:
                 if prob_xh == 0 or prob_xi == 0:
                     continue
                 term = prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
-                if not np.isnan(term):
+                if not (np.isnan(term) or np.isinf(term)):
                     summation += term
         return summation
 
