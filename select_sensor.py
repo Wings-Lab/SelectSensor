@@ -1932,7 +1932,7 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data16/heterogeneous/cov', 'data16/heterogeneous/sensors', 'data16/heterogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/heterogeneous/cov', 'data64/heterogeneous/sensors', 'data64/heterogeneous/hypothesis')
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2b(selectsensor)
     #plots.figure_2a(selectsensor)
