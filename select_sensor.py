@@ -1932,9 +1932,9 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/heterogeneous/cov', 'data64/heterogeneous/sensors', 'data64/heterogeneous/hypothesis')
+    selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2b(selectsensor)
+    plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
