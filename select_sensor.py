@@ -1,6 +1,7 @@
 '''
 Select sensor and detect transmitter
 '''
+
 import random
 import math
 import copy
@@ -1272,7 +1273,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=400)
+        discretize_x = self.discretize(bin_num=100)
         cost = 0
         subset_to_compute = []
         while cost < budget and complement_index:
