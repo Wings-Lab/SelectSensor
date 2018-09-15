@@ -1201,13 +1201,15 @@ class SelectSensor:
         '''
         self.set_priori()
         random.seed(1)
+        np.random.seed(2)
         plot_data = []
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
-        number_hypotheses = 10*len(self.transmitters)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
+        self.print_grid(self.grid_priori)
+        discretize_x = self.discretize(bin_num=400)
         subset_to_compute = []
         cost = 0
         cost_list = []
@@ -1221,20 +1223,19 @@ class SelectSensor:
             if not option:
                 break
 
-            true_hypotheses = self.generate_true_hypotheses(number_hypotheses)
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(subset_index, true_hypotheses, candidate) \
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
                                 for candidate in option)
 
             best_candidate = candidate_results[0][0]
             cost_of_candidate = self.sensors[best_candidate].cost
-            maximum = candidate_results[0][1]/cost_of_candidate
+            maximum = candidate_results[0][1]/cost_of_candidate      # the metric is MI/cost
             for candidate in candidate_results:
-                mi_incre = candidate[1]
+                mi = candidate[1]
                 cost_of_candidate = self.sensors[candidate[0]].cost
-                mi_incre_cost = mi_incre/cost_of_candidate
-                print(candidate[0], mi_incre, cost_of_candidate, mi_incre_cost)
-                if mi_incre_cost > maximum:
-                    maximum = mi_incre_cost
+                mi_cost = mi/cost_of_candidate                       # the metric is MI/cost
+                print(candidate[0], mi, cost_of_candidate, mi_cost)
+                if mi_cost > maximum:
+                    maximum = mi_cost
                     best_candidate = candidate[0]
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
@@ -1265,7 +1266,6 @@ class SelectSensor:
             plot_data (list)
         '''
         self.set_priori()
-        plot_data = []
         random.seed(1)
         np.random.seed(2)
         true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
@@ -1299,6 +1299,7 @@ class SelectSensor:
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
+        plot_data = []
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
@@ -1658,10 +1659,8 @@ class SelectSensor:
 
         while cost < budget and complement_index:
             distances = self.weighted_distance_priori(complement_index)
-            #print(distances)
-            min_distances = np.argwhere(distances == np.amax(distances))  # there could be multiple max distances
-            #print(min_distances)
-            select = random.choice(min_distances)[0]
+            max_distances = np.argwhere(distances == np.amax(distances))  # there could be multiple max distances
+            select = random.choice(max_distances)[0]
             index_nearest = complement_index[select]
 
             ordered_insert(subset_index, index_nearest)
@@ -1695,8 +1694,9 @@ class SelectSensor:
             for transmitter in self.transmitters:
                 tran_x, tran_y = transmitter.x, transmitter.y
                 dist = distance.euclidean([sensor.x, sensor.y], [tran_x, tran_y])
-                dist = dist if dist >= 1 else 0.5
-                weighted_distance += 1/dist * self.grid_priori[tran_x][tran_y]
+                dist = dist if dist >= 1 else 0.5                                 # sensor very close by with high priori should be selected
+                weighted_distance += 1/dist * self.grid_priori[tran_x][tran_y]    # so the metric is priori/disctance
+
             distances.append(weighted_distance)
         return np.array(distances)
 
@@ -1708,14 +1708,6 @@ class SelectSensor:
             cores (int):
         '''
         self.set_priori()
-        '''
-        energy = pd.read_csv('data/energy.txt', header=None)
-        size = energy[1].count()
-        i = 0
-        for sensor in self.sensors:
-            setattr(self.sensors.get(sensor), 'cost', energy[1][i%size])
-            i += 1
-        '''
         plot_data = []
         random.seed(1)
         np.random.seed(2)
@@ -1935,30 +1927,15 @@ class SelectSensor:
             print(time.time()-start, end='\n', file=sensor_file)
 
 
-def new_data():
-    '''Change config.json file, i.e. grid len and sensor number, then generate new data.
-    '''
-    selectsensor = SelectSensor('config.json')
-
-    selectsensor.init_random_sensors()
-    selectsensor.save_sensor('data/sensor.txt')
-
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.save_mean_std('data/mean_std.txt')
-
-    selectsensor.read_init_sensor('data/sensor.txt')
-    selectsensor.read_mean_std('data/mean_std.txt')
-    selectsensor.generate_data('data/artificial_samples.csv')
-
-
 def main():
     '''main
     '''
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2a(selectsensor)
+    selectsensor.init_from_real_data('data64/heterogeneous/cov', 'data64/heterogeneous/sensors', 'data64/heterogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
+    plots.figure_2b(selectsensor)
     #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
@@ -2012,5 +1989,4 @@ def main():
     #plots.save_data_offline_greedy(plot_data, 'plot_data15/Offline_Greedy.csv')
 
 if __name__ == '__main__':
-    #new_data()
     main()

@@ -91,14 +91,14 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    plot_data = selectsensor.select_online_random_hetero(10, 4, 250)
-    save_data(plot_data, 'plot_data32/Online_Random_hetero.csv')
+    #plot_data = selectsensor.select_online_random_hetero(40, 48, 1526)
+    #save_data(plot_data, 'plot_data64/Online_Random_hetero.csv')
 
-    plot_data = selectsensor.select_online_nearest_hetero(10, 4, 250)
-    save_data(plot_data, 'plot_data32/Online_Nearest_hetero.csv')
+    #plot_data = selectsensor.select_online_nearest_hetero(15, 48, 1526)
+    #save_data(plot_data, 'plot_data64/Online_Nearest_hetero.csv')
 
-    plot_data = selectsensor.select_online_greedy_hetero(6, 4, 250)
-    save_data(plot_data, 'plot_data32/Online_Greedy_hetero.csv')
+    plot_data = selectsensor.select_online_greedy_hetero(6, 20, 1526)
+    save_data(plot_data, 'plot_data16/Online_Greedy_hetero.csv')
 
 
 if __name__ == '__main__':
