@@ -222,7 +222,7 @@ def generate_hypothesis_data():
     mean_var_arrays = {}
     var_var_arrays = {}
     start_logNFFT = 8
-    end_logNFFT = 8 #change start and end_logNFFT to same value for homogeneous sensors
+    end_logNFFT = 14 #change start and end_logNFFT to same value for homogeneous sensors
     models = {}
     predictions= {}
     delmean = {}
@@ -415,8 +415,8 @@ import glob
 
 
 
-length = 16              # change number of cells
-number_of_sensors = 40   # change number of sensors
+length = 64              # change number of cells
+number_of_sensors = 1000  # change number of sensors
 generate_hypothesis_data()
 
 '''
