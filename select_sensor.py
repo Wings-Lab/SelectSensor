@@ -1209,7 +1209,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=400)
+        discretize_x = self.discretize(bin_num=200)
         subset_to_compute = []
         cost = 0
         cost_list = []
