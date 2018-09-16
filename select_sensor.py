@@ -1273,7 +1273,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=100)
+        discretize_x = self.discretize(bin_num=500)
         cost = 0
         subset_to_compute = []
         while cost < budget and complement_index:
@@ -1933,7 +1933,7 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
