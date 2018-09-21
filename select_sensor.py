@@ -17,7 +17,7 @@ from transmitter import Transmitter
 from utility import read_config, ordered_insert#, print_results
 #from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
-import pprofile
+#import pprofile
 
 class SelectSensor:
     '''Near-optimal low-cost sensor selection
@@ -129,8 +129,8 @@ class SelectSensor:
         for i in range(self.grid_len):
             for j in range(self.grid_len):
                 transmitter = Transmitter(i, j)
-                setattr(transmitter, 'hypothesis', i*self.grid_len + j)
-                self.transmitters[i * self.grid_len + j] = transmitter
+                setattr(transmitter, 'hypothesis', j*self.grid_len + i)
+                self.transmitters[j * self.grid_len + i] = transmitter
 
 
     def init_random_sensors(self):
@@ -1298,7 +1298,7 @@ class SelectSensor:
         cost = 0
         subset_to_compute = []
         while cost < budget and complement_index:
-            candidate_results = Parallel(n_jobs=cores, require='sharedmem')(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
+            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
                                 for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]
@@ -1318,7 +1318,7 @@ class SelectSensor:
             self.print_grid(self.grid_priori)
             cost += 1
 
-        subset_results = Parallel(n_jobs=cores, require='sharedmem')(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
         plot_data = []
         for result in subset_results:
@@ -1414,7 +1414,6 @@ class SelectSensor:
         #             max_std = std
 
         X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
-
         #discretize_x = np.zeros((len(self.sensors), len(self.transmitters), bin_num))
         discretize_x = np.array(Parallel(n_jobs=cores)\
                 (delayed(self.inner_discretize)(X, bin_num, sensor) for sensor in self.sensors))
@@ -1522,26 +1521,30 @@ class SelectSensor:
             discretize_x (np.ndarray, n = 3): for each pair of (sensor, transmitter), discretize the gaussian distribution
             sensor_index (int): the X_e in the paper, a candidate sensor
         '''
-        prob_x = [0] * len(discretize_x[0, 0])          # compute the probability of x
+        prob_x = np.zeros(len(discretize_x[0, 0]))          # compute the probability of x
         x_num = len(discretize_x[0, 0])
         for i in range(x_num):
-            summation = 0
-            for trans in self.transmitters:
-                x = trans.hypothesis // self.grid_len
-                y = trans.hypothesis % self.grid_len
-                summation += discretize_x[sensor_index, trans.hypothesis, i] * self.grid_priori[x, y]
-            prob_x[i] = summation
+            prob_x[i] = np.dot(discretize_x[sensor_index, :, i],
+                               self.grid_priori.flatten())
+            # summation = 0
+            # for trans in self.transmitters:
+            #     summation += discretize_x[sensor_index, trans.hypothesis, i]\
+            #                  * self.grid_priori[trans.x, trans.y]
+            #prob_x[i] = summation
 
         summation = 0         # compute the mutual information
         for trans in self.transmitters:
-            x = trans.hypothesis // self.grid_len
-            y = trans.hypothesis % self.grid_len
-            for prob_xh, prob_xi in zip(discretize_x[sensor_index, trans.hypothesis], prob_x):
-                if prob_xh == 0 or prob_xi == 0:
-                    continue
-                term = prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
-                if not (np.isnan(term) or np.isinf(term)):
-                    summation += term
+            #logvec = np.nan_to_num(logvec)
+            #terms = discretize_x[sensor_index, :] * self.grid_priori[trans.x, trans.y] * logvec
+            #mi = np.sum(terms)
+            for prob_xh in discretize_x[sensor_index, trans.hypothesis]:
+                for prob_xi in prob_x:
+                    if prob_xh == 0 or prob_xi == 0:
+                        continue
+                    term = prob_xh * self.grid_priori[trans.x, trans.y] * math.log2(prob_xh/prob_xi)
+                    if not (np.isnan(term) or np.isinf(term)):
+                        summation += term
+            #print(mi, summation)
         return summation
 
 
