@@ -1418,8 +1418,8 @@ class SelectSensor:
         discretize_x = np.array(Parallel(n_jobs=cores)\
                 (delayed(self.inner_discretize)(X, bin_num, sensor) for sensor in self.sensors))
         #discretize_x = np.zeros(len(self.sensors))
-        discretize_x = np.array([self.inner_discretize(X, bin_num, sensor)
-                                   for sensor in self.sensors])
+        #discretize_x = np.array([self.inner_discretize(X, bin_num, sensor)
+        #                           for sensor in self.sensors])
         return discretize_x
 
 
