@@ -80,9 +80,9 @@ def figure_2a(selectsensor):
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(10, 7) # 32 grid: 378
+    plot_data = selectsensor.select_online_greedy_p(5, -1) # 32 grid: 378
     print('greedy:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Greedy.csv')
+    save_data(plot_data, 'plot_data16/Online_Greedy.csv')
 
 
 def figure_2b(selectsensor):
