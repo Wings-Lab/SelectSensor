@@ -80,7 +80,7 @@ def figure_2a(selectsensor):
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(10, 20, 1340)  # 32 grid: 378
+    plot_data = selectsensor.select_online_greedy_p(10, 1)  # 32 grid: 378
     print('greedy:', time.time()-start)
     save_data(plot_data, 'plot_data64/Online_Greedy.csv')
 
@@ -92,7 +92,7 @@ def figure_2b(selectsensor):
        Algorithm - greedy + nearest + random
     '''
     start = time.time()
-    plot_data = selectsensor.select_online_random_hetero(35, 20, 1526)
+    plot_data = selectsensor.select_online_random_hetero(35, 4, 1526)
     print('online random:', time.time()-start)
     save_data(plot_data, 'plot_data64/Online_Random_hetero.csv')
 

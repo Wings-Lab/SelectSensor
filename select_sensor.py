@@ -17,7 +17,7 @@ from transmitter import Transmitter
 from utility import read_config, ordered_insert#, print_results
 #from cuda_kernals import o_t_approx_kernal, o_t_kernal, o_t_approx_dist_kernal
 import plots
-
+import pprofile
 
 class SelectSensor:
     '''Near-optimal low-cost sensor selection
@@ -50,7 +50,9 @@ class SelectSensor:
         self.covariance = np.zeros(0)
         self.init_transmitters()
         self.set_priori()
-        self.means_stds = {}
+        #self.means_stds = {}
+        self.means = np.zeros(0)
+        self.stds = np.zeros(0)
         self.subset = {}
         self.subset_index = []
         self.meanvec_array = np.zeros(0)
@@ -78,24 +80,33 @@ class SelectSensor:
                 self.sensors.append(Sensor(x, y, std, cost, gain_up_bound=max_gain, index=index))
                 index += 1
 
+        self.means = np.zeros((self.grid_len * self.grid_len, len(self.sensors)))
+        self.stds = np.zeros((self.grid_len * self.grid_len, len(self.sensors)))
         with open(hypothesis_file, 'r') as f:
-            self.means_stds = {}
+            #self.means_stds = {}
             lines = f.readlines()
+            count = 0
             for line in lines:
                 line = line.split(' ')
                 tran_x, tran_y = int(line[0]), int(line[1])
                 sen_x, sen_y = int(line[2]), int(line[3])
                 mean, std = float(line[4]), float(line[5])
-                self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
+                try:
+                    self.means[tran_y * self.grid_len + tran_x, count] = mean
+                    self.stds[tran_y * self.grid_len + tran_x, count] = std
+                except:
+                    pass
+                count = (count + 1) % len(self.sensors)
+
             del lines
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
-            mean_vec = []
+            mean_vec = [0] * len(self.sensors)
             for sensor in self.sensors:
-                sen_x, sen_y = sensor.x, sensor.y
-                mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                mean_vec.append(mean_std[0])
+                #sen_x, sen_y = sensor.x, sensor.y
+                mean = self.means[tran_x + self.grid_len * tran_y, sensor.index]
+                mean_vec[sensor.index] = mean
             transmitter.mean_vec = np.array(mean_vec)
             #setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         #self.transmitters_to_array() # for GPU
@@ -114,12 +125,12 @@ class SelectSensor:
     def init_transmitters(self):
         '''Initiate a transmitter at all locations
         '''
-        self.transmitters = []
+        self.transmitters = [0] * self.grid_len * self.grid_len
         for i in range(self.grid_len):
             for j in range(self.grid_len):
                 transmitter = Transmitter(i, j)
                 setattr(transmitter, 'hypothesis', i*self.grid_len + j)
-                self.transmitters.append(transmitter)
+                self.transmitters[i * self.grid_len + j] = transmitter
 
 
     def init_random_sensors(self):
@@ -196,13 +207,14 @@ class SelectSensor:
         '''
         with open(filename, 'r') as f:
             lines = f.readlines()
+            count = 0
             for line in lines:
                 line = line.split(' ')
                 tran_x, tran_y = int(line[0]), int(line[1])
                 sen_x, sen_y = int(line[2]), int(line[3])
                 mean, std = float(line[4]), float(line[5])
-                self.means_stds[(tran_x, tran_y, sen_x, sen_y)] = (mean, std)
-
+                self.means[tran_x + self.grid_len * tran_y, count] = mean
+                self.stds[tran_x + self.grid_len * tran_y, count] = std
 
     def generate_data(self, sample_file):
         '''Since we don't have the real data yet, we make up some artificial data according to mean_std.txt
@@ -219,7 +231,10 @@ class SelectSensor:
             one_transmitter = []
             for sensor in self.sensors:  # for each transmitter, send signal to all sensors
                 sen_x, sen_y = sensor.x, sensor.y
-                mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                #mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                mean = self.means[tran_x + self.grid_len * tran_y, sensor.index]
+                std = self.stds[tran_x + self.grid_len * tran_y, sensor.index]
+
                 one_transmitter.append(np.random.normal(mean, std))
             data.append(one_transmitter)
             i += 1
@@ -241,11 +256,11 @@ class SelectSensor:
 
         for transmitter in self.transmitters:
             tran_x, tran_y = transmitter.x, transmitter.y
-            mean_vec = []
+            mean_vec = [0] * len(self.sensors)
             for sensor in self.sensors:
                 sen_x, sen_y = sensor.x, sensor.y
-                mean_std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
-                mean_vec.append(mean_std[0])
+                mean = self.means[tran_y * self.grid_len + tran_x, sensor.index]
+                mean_vec[sensor.index] = mean
             transmitter.mean_vec = np.array(mean_vec)
             setattr(transmitter, 'multivariant_gaussian', multivariate_normal(mean=transmitter.mean_vec, cov=self.covariance))
         self.transmitters_to_array()
@@ -1161,8 +1176,9 @@ class SelectSensor:
             while i < 10:  # test 10 times for each transmitter
                 data = []
                 for sensor in self.subset:
-                    sen_x, sen_y = sensor.x, sensor.y
-                    mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                    #mean, std = self.means_stds.get((tran_x, tran_y, sen_x, sen_y))
+                    mean = self.means[tran_x + self.grid_len * tran_y, sensor.index]
+                    std = self.stds[tran_x + self.grid_len * tran_y, sensor.index]
                     data.append(np.random.normal(mean, std))
                 for transmitter2 in self.transmitters:  # given hypothesis, the probability of data
                     multivariant_gaussian = transmitter2.multivariant_gaussian # see which hypothesis is "best"
@@ -1192,13 +1208,15 @@ class SelectSensor:
         return (x, y)
 
 
-    def select_online_greedy_hetero(self, budget, cores, true_index):
+    def select_online_greedy_hetero(self, budget, cores, true_index = -1):
         '''Heterogeneous version of online greedy selection
         Parameters:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
             cost_filename (str): file that has the cost of sensors
         '''
+        if true_index == -1:
+            true_index = random.randint(0, self.grid_len * self.grid_len - 1)
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
@@ -1209,7 +1227,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=200)
+        discretize_x = self.discretize(bin_num=50)
         subset_to_compute = []
         cost = 0
         cost_list = []
@@ -1256,7 +1274,7 @@ class SelectSensor:
         return plot_data
 
 
-    def select_online_greedy_p(self, budget, cores, true_index):
+    def select_online_greedy_p(self, budget, cores, true_index = -1):
         '''(Parallel version) Version 2 of online greedy selection with mutual_information version 2
         Parameters:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
@@ -1265,6 +1283,8 @@ class SelectSensor:
         Return:
             plot_data (list)
         '''
+        if true_index == -1:
+            true_index = random.randint(0, self.grid_len * self.grid_len - 1)
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
@@ -1273,11 +1293,12 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=100)
+        num_bins = 100
+        discretize_x = self.discretize(num_bins, cores)
         cost = 0
         subset_to_compute = []
         while cost < budget and complement_index:
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
+            candidate_results = Parallel(n_jobs=cores, require='sharedmem')(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
                                 for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]
@@ -1297,7 +1318,7 @@ class SelectSensor:
             self.print_grid(self.grid_priori)
             cost += 1
 
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores, require='sharedmem')(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
 
         plot_data = []
         for result in subset_results:
@@ -1336,7 +1357,7 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=400)
+        discretize_x = self.discretize(bin_num, cores)
         cost = 0
 
         while cost < budget and complement_index:
@@ -1358,34 +1379,48 @@ class SelectSensor:
             cost += 1
         return plot_data
 
+    def inner_discretize(self, X, bin_num, sensor):
+        discretize_x = np.zeros((self.grid_len * self.grid_len, bin_num))
+        for transNum in range(self.grid_len * self.grid_len):
+            #mean, std = self.means_stds.get((trans_x, trans_y, sensor.x, sensor.y))
+            mean = self.means[transNum, sensor.index]
+            std = self.stds[transNum, sensor.index]
+            cdf = norm.cdf(X, mean, std)
+            for i in range(bin_num):
+                discretize_x[transNum, i] = cdf[i + 1] - cdf[i]
+        return discretize_x
 
-    def discretize(self, bin_num=1000):
+    def discretize(self, bin_num, cores):
         '''Discretize the likelihood of data P(X|h) for each hypothesis
         Parameters:
             bin (int): bin size, discretize the X axis into bin # of bins
         Return:
             (numpy.ndarray): n = 3
         '''
-        min_mean, max_mean, max_std = 999, -999, 0
-        for sensor in self.sensors:
-            for trans in self.transmitters:
-                mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
-                if mean < min_mean:
-                    min_mean = mean
-                elif mean > max_mean:
-                    max_mean = mean
-                if std > max_std:
-                    max_std = std
+        min_mean = np.min(self.means)
+        max_mean = np.max(self.means)
+        max_std = np.max(self.stds)
+            # for sensor in self.sensors:
+        #     for trans in range(self.grid_len * self.grid_len):
+        #         #mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
+        #         mean = self.means[trans, sensor.index]
+        #         std = self.stds[trans, sensor.index]
+        #
+        #         if mean < min_mean:
+        #             min_mean = mean
+        #         elif mean > max_mean:
+        #             max_mean = mean
+        #         if std > max_std:
+        #             max_std = std
 
         X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
 
-        discretize_x = np.zeros((len(self.sensors), len(self.transmitters), bin_num))
-        for sensor in self.sensors:
-            for trans in self.transmitters:
-                mean, std = self.means_stds.get((trans.x, trans.y, sensor.x, sensor.y))
-                cdf = norm.cdf(X, mean, std)
-                for i in range(bin_num):
-                    discretize_x[sensor.index, trans.hypothesis, i] = cdf[i + 1] - cdf[i]
+        #discretize_x = np.zeros((len(self.sensors), len(self.transmitters), bin_num))
+        discretize_x = np.array(Parallel(n_jobs=cores)\
+                (delayed(self.inner_discretize)(X, bin_num, sensor) for sensor in self.sensors))
+        #discretize_x = np.zeros(len(self.sensors))
+        discretize_x = np.array([self.inner_discretize(X, bin_num, sensor)
+                                   for sensor in self.sensors])
         return discretize_x
 
 
@@ -1427,7 +1462,10 @@ class SelectSensor:
         data = []                          # the true transmitter generate some data
         for index in subset_index:
             sensor = self.sensors[index]
-            mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
+            #mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
+            mean = self.means[true_x + self.grid_len * true_y, sensor.index]
+            std = self.stds[true_x + self.grid_len * true_y, sensor.index]
+
             data.append(np.random.normal(mean, std))
         for trans in self.transmitters:
             trans.set_mean_vec_sub(subset_index)
@@ -1484,7 +1522,7 @@ class SelectSensor:
             discretize_x (np.ndarray, n = 3): for each pair of (sensor, transmitter), discretize the gaussian distribution
             sensor_index (int): the X_e in the paper, a candidate sensor
         '''
-        prob_x = []           # compute the probability of x
+        prob_x = [0] * len(discretize_x[0, 0])          # compute the probability of x
         x_num = len(discretize_x[0, 0])
         for i in range(x_num):
             summation = 0
@@ -1492,7 +1530,7 @@ class SelectSensor:
                 x = trans.hypothesis // self.grid_len
                 y = trans.hypothesis % self.grid_len
                 summation += discretize_x[sensor_index, trans.hypothesis, i] * self.grid_priori[x, y]
-            prob_x.append(summation)
+            prob_x[i] = summation
 
         summation = 0         # compute the mutual information
         for trans in self.transmitters:
@@ -1528,7 +1566,10 @@ class SelectSensor:
             data = []
             for index in subset_index:
                 sensor = self.sensors[index]
-                mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
+                #mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
+                mean = self.means[true_x + self.grid_len * true_y, sensor.index]
+                std = self.stds[true_x + self.grid_len * true_y, sensor.index]
+
                 data.append(np.random.normal(mean, std))
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
