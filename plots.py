@@ -59,7 +59,7 @@ def figure_1b(selectsensor):
     #plot_data = selectsensor.select_offline_coverage_hetero(30, 6)
     #save_data(plot_data, 'plot_data64/Offline_Coverage_hetero.csv')
 
-    plot_data = selectsensor.select_offline_greedy_hetero_lazy(20, 12)
+    plot_data = selectsensor.select_offline_greedy_hetero_lazy(20, 48)
     save_data(plot_data, 'plot_data64/Offline_Greedy_hetero.csv')
 
 
@@ -80,7 +80,7 @@ def figure_2a(selectsensor):
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(10, 48) # 32 grid: 378
+    plot_data = selectsensor.select_online_greedy_p(10, 7) # 32 grid: 378
     print('greedy:', time.time()-start)
     save_data(plot_data, 'plot_data64/Online_Greedy.csv')
 
