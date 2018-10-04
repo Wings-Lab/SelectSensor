@@ -1386,16 +1386,20 @@ class SelectSensor:
             prob_x[i] = np.dot(discretize_x[sensor_index, :, i], self.grid_priori.flatten())
 
         summation = 0         # compute the mutual information
+        summation2 = 0
         for trans in self.transmitters:
             x = trans.hypothesis // self.grid_len
             y = trans.hypothesis % self.grid_len
-            for prob_xh, prob_xi in zip(discretize_x[sensor_index, trans.hypothesis], prob_x):
-                if prob_xh == 0 or prob_xi == 0:
-                    continue
-                term = prob_xh * self.grid_priori[x, y] * math.log2(prob_xh/prob_xi)
-                if not (np.isnan(term) or np.isinf(term)):
-                    summation += term
-        return summation
+            prob_xh = discretize_x[sensor_index, trans.hypothesis, :]
+            log_term = np.log2(prob_xh / prob_x)
+            from numpy import inf
+            log_term[log_term == inf] = 0
+            summation_term = self.grid_priori[x, y] * log_term * prob_xh
+            np.nan_to_num(summation_term, copy=False)
+
+            summation2 += np.sum(summation_term)
+
+        return summation2
 
 
     #@profile
