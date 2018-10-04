@@ -80,7 +80,7 @@ def figure_2a(selectsensor):
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(4, -1, 100) # 32 grid: 378
+    plot_data = selectsensor.select_online_greedy_p(4, 4, 378) # 32 grid: 378
     print('greedy:', time.time()-start)
     save_data(plot_data, 'plot_data16/Online_Greedy.csv')
 
@@ -91,20 +91,20 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    start = time.time()
-    plot_data = selectsensor.select_online_random_hetero(35, 4, 1526)
-    print('online random:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Random_hetero.csv')
+    #start = time.time()
+    #plot_data = selectsensor.select_online_random_hetero(35, 4, 1526)
+    #print('online random:', time.time()-start)
+    #save_data(plot_data, 'plot_data64/Online_Random_hetero.csv')
+
+    #start = time.time()
+    #plot_data = selectsensor.select_online_nearest_hetero(10, 20, 1526)
+    #print('online nearest:', time.time()-start)
+    #save_data(plot_data, 'plot_data64/Online_Nearest_hetero.csv')
 
     start = time.time()
-    plot_data = selectsensor.select_online_nearest_hetero(10, 20, 1526)
-    print('online nearest:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Nearest_hetero.csv')
-
-    start = time.time()
-    plot_data = selectsensor.select_online_greedy_hetero(6, 20, 1526)
+    plot_data = selectsensor.select_online_greedy_hetero(4, 4, 100)
     print('online greedy:', time.time()-start)
-    save_data(plot_data, 'plot_data64/Online_Greedy_hetero.csv')
+    save_data(plot_data, 'plot_data16/Online_Greedy_hetero.csv')
 
 
 if __name__ == '__main__':
