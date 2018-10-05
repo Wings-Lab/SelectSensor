@@ -43,6 +43,7 @@ class SelectSensor:
         self.config = read_config(filename)
         self.sen_num = int(self.config["sensor_number"])
         self.grid_len = int(self.config["grid_length"])
+        self.discre_x_file = self.config["discretized_x_file"]
         self.grid_priori = np.zeros(0)
         self.grid_posterior = np.zeros(0)
         self.transmitters = []
@@ -1096,14 +1097,14 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)]
         #self.print_grid(self.grid_priori)
         start = time.time()
-        discretize_x = self.discretize(bin_num=200, cores=cores)
+        discretize_x = self.discretize(bin_num=100, cores=cores)
         print('discretize x', time.time() - start)
         cost = 0
         subset_to_compute = []
         mi = []                 # save the mutual informations
         start = time.time()
         while cost < budget and complement_index:
-            candidate_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_greedy)(discretize_x[candidate], subset_index, candidate) \
+            candidate_results = Parallel(n_jobs=cores, verbose=0)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
                                                                for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]
@@ -1132,6 +1133,63 @@ class SelectSensor:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
         return plot_data, mi
+
+
+    def select_online_greedy_p2(self, budget, cores, true_index=-1):
+        '''(Parallel version) Version 3 of online greedy selection with mutual_information version 4
+        Args:
+            budget (int): amount of budget, in the homo case, every sensor has budget=1
+            cores (int): number of cores used in the parallezation
+            true_index (int): the true transmitter
+        Return:
+            plot_data (list)
+        '''
+        if true_index == -1:
+            random.seed(0)
+            true_index = random.randint(0, self.grid_len * self.grid_len)
+        self.set_priori()
+        random.seed(1)
+        np.random.seed(2)
+        true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
+        print('\ntrue transmitter', true_transmitter)
+        subset_index = []
+        complement_index = [i for i in range(self.sen_num)]
+        #self.print_grid(self.grid_priori)
+        start = time.time()
+        discretize_x = self.discretize2(bin_num=100, cores=cores)
+        print('discretize x', time.time() - start)
+        cost = 0
+        subset_to_compute = []
+        mi_list = []                 # save the mutual informations
+        start = time.time()
+        while cost < budget and complement_index:
+            maximum = -1
+            best_candidate = -1
+            for candidate in complement_index:
+                mi = self.mutual_information(discretize_x, candidate)
+                print(candidate, mi)
+                if mi > maximum:
+                    maximum = mi
+                    best_candidate = candidate
+
+            ordered_insert(subset_index, best_candidate)
+            complement_index.remove(best_candidate)
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            print('MI = ', maximum)
+            mi_list.append(maximum)
+            self.print_subset(subset_index)
+            self.update_hypothesis(true_transmitter, subset_index)
+            #self.print_grid(self.grid_priori)
+            cost += 1
+        print('MI time', time.time() - start)
+        subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
+                                                for subset_index in subset_to_compute)
+
+        plot_data = []
+        for result in subset_results:
+            plot_data.append([str(result[0]), len(result[0]), result[1]])
+
+        return plot_data, mi_list
 
 
     def inner_online_greedy(self, discretize_x, subset_index, candidate):
@@ -1216,6 +1274,44 @@ class SelectSensor:
         Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors)
 
         return discretize_x
+
+
+    def discretize2(self, bin_num, cores):
+        '''Discretize the likelihood of data P(X|h) for each hypothesis
+        Args:
+            bin (int): bin size, discretize the X axis into bin # of bins
+        Return:
+            (numpy.ndarray): n = 3
+        '''
+        folder = './joblib_memmap'
+        try:
+            os.mkdir(folder)
+        except FileExistsError:
+            pass
+        discretize_x_filename = os.path.join(folder, self.discre_x_file)
+        if os.path.isfile(discretize_x_filename):
+            discretized_x = load(discretize_x_filename, 'r')
+            return np.array(discretized_x)
+
+        min_mean = np.min(self.means)
+        max_mean = np.max(self.means)
+        max_std = np.max(self.stds)
+        X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
+
+        data_filename_memmap = os.path.join(folder, 'X_memmap')
+        dump(X, data_filename_memmap)
+        X = load(data_filename_memmap, mmap_mode='r')
+
+        output_filename_memmap = os.path.join(folder, 'output_memmap')
+        discretize_x = np.zeros((len(self.sensors), self.grid_len * self.grid_len, bin_num))
+
+        discretize_x = np.memmap(output_filename_memmap, dtype=discretize_x.dtype, shape=discretize_x.shape, mode='w+')
+        Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors)
+
+        discretize_x_np = np.array(discretize_x)
+        dump(discretize_x_np, discretize_x_filename)
+        os.remove(output_filename_memmap)
+        return discretize_x_np
 
 
     def inner_discretize(self, X, bin_num, sensor, discretize_x):
@@ -1362,16 +1458,16 @@ class SelectSensor:
         import warnings
         warnings.filterwarnings("ignore")                   # get rid of annoying runtime warnings such as devide by zero
 
-        prob_x = np.zeros(len(discretize_x[0]))          # compute the probability of x
-        x_num = len(discretize_x[0])
+        prob_x = np.zeros(len(discretize_x[0, 0]))          # compute the probability of x
+        x_num = len(discretize_x[0, 0])
         for i in range(x_num):
-            prob_x[i] = np.dot(discretize_x[:, i], self.grid_priori.flatten())
+            prob_x[i] = np.dot(discretize_x[sensor_index, :, i], self.grid_priori.flatten())
 
         summation = 0                                       # compute the mutual information
         for trans in self.transmitters:
             x = trans.hypothesis // self.grid_len
             y = trans.hypothesis % self.grid_len
-            prob_xh = discretize_x[trans.hypothesis, :]
+            prob_xh = discretize_x[sensor_index, trans.hypothesis, :]
             log_term = np.log2(prob_xh / prob_x)
             log_term[log_term == np.inf] = 0
             summation_term = self.grid_priori[x, y] * log_term * prob_xh
