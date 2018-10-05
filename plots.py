@@ -16,6 +16,13 @@ def save_data(plot_data, file_path):
             #print(data)
             f.write(str(data[1]) + ',' + str(data[2]) + '\n')
 
+def save_mi(mi, file_path):
+    '''save the mutual information at each iteration
+    '''
+    with open(file_path, 'w') as f:
+        for m in mi:
+            f.write(str(m) + '\n')
+
 
 def save_data_offline_greedy(plot_data, file_path):
     '''Save the plot_data to file_path for offline greedy
@@ -79,10 +86,14 @@ def figure_2a(selectsensor):
     #print('random:', time.time()-start)
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
-    start = time.time()
-    plot_data = selectsensor.select_online_greedy_p(4, 4, 378) # 32 grid: 378
-    print('greedy:', time.time()-start)
-    save_data(plot_data, 'plot_data16/Online_Greedy.csv')
+    filename_acc = 'plot_data16/online_greedy_homo/acc_CAITAO.csv'
+    filename_mi = 'plot_data16/online_greedy_homo/mi_CAITAO.csv'
+    for i in range(10):
+        start = time.time()
+        plot_data, mi = selectsensor.select_online_greedy_p(4, 4, -1) # 32 grid: 378
+        print('greedy:', time.time()-start)
+        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+        save_mi(mi, filename_mi.replace('CAITAO', str(i)))
 
 
 def figure_2b(selectsensor):
@@ -101,10 +112,12 @@ def figure_2b(selectsensor):
     #print('online nearest:', time.time()-start)
     #save_data(plot_data, 'plot_data64/Online_Nearest_hetero.csv')
 
-    start = time.time()
-    plot_data = selectsensor.select_online_greedy_hetero(4, 4, 100)
-    print('online greedy:', time.time()-start)
-    save_data(plot_data, 'plot_data16/Online_Greedy_hetero.csv')
+    filename_acc = 'plot_data16/online_greedy_hetero/acc_CAITAO.csv'
+    for i in range(10):
+        start = time.time()
+        plot_data = selectsensor.select_online_greedy_hetero(3, 4, -1) # 32 grid: 378
+        print('greedy:', time.time()-start)
+        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
 
 if __name__ == '__main__':

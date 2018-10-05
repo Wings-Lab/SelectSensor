@@ -1015,17 +1015,18 @@ class SelectSensor:
             cost_filename (str): file that has the cost of sensors
         '''
         if true_index == -1:
-            true_index = random.randint(0, self.grid_len * self.grid_len - 1)
+            random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
         plot_data = []
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
-        print('true transmitter', true_transmitter)
+        print('\ntrue transmitter', true_transmitter)
 
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        self.print_grid(self.grid_priori)
+        #self.print_grid(self.grid_priori)
         discretize_x = self.discretize(bin_num=200, cores=cores)
         subset_to_compute = []
         cost = 0
@@ -1050,7 +1051,7 @@ class SelectSensor:
                 mi = candidate[1]
                 cost_of_candidate = self.sensors[candidate[0]].cost
                 mi_cost = mi/cost_of_candidate                       # the metric is MI/cost
-                print(candidate[0], mi, cost_of_candidate, mi_cost)
+                #print(candidate[0], mi, cost_of_candidate, mi_cost)
                 if mi_cost > maximum:
                     maximum = mi_cost
                     best_candidate = candidate[0]
@@ -1058,7 +1059,7 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
-            self.print_grid(self.grid_priori)
+            #self.print_grid(self.grid_priori)
             cost += self.sensors[best_candidate].cost
             cost_list.append(cost)
             subset_to_compute.append(copy.deepcopy(subset_index))
@@ -1084,19 +1085,20 @@ class SelectSensor:
             plot_data (list)
         '''
         if true_index == -1:
-            true_index = random.randint(0, self.grid_len * self.grid_len - 1)
+            random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
         np.random.seed(2)
         true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
-        print('true transmitter', true_transmitter)
+        print('\ntrue transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        self.print_grid(self.grid_priori)
-        num_bins = 100
-        discretize_x = self.discretize(num_bins, cores)
+        #self.print_grid(self.grid_priori)
+        discretize_x = self.discretize(bin_num=200, cores=cores)
         cost = 0
         subset_to_compute = []
+        mi = []                 # save the mutual informations
         while cost < budget and complement_index:
             candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
                                                                for candidate in complement_index)
@@ -1104,7 +1106,7 @@ class SelectSensor:
             best_candidate = candidate_results[0][0]
             maximum = candidate_results[0][1]
             for candidate in candidate_results:
-                print(candidate[2], candidate[1])
+                #print(candidate[2], candidate[1])
                 if candidate[1] > maximum:
                     maximum = candidate[1]
                     best_candidate = candidate[0]
@@ -1113,9 +1115,10 @@ class SelectSensor:
             complement_index.remove(best_candidate)
             subset_to_compute.append(copy.deepcopy(subset_index))
             print('MI = ', maximum)
+            mi.append(maximum)
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
-            self.print_grid(self.grid_priori)
+            #self.print_grid(self.grid_priori)
             cost += 1
 
         subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
@@ -1125,7 +1128,7 @@ class SelectSensor:
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
 
-        return plot_data
+        return plot_data, mi
 
 
     def inner_online_greedy(self, discretize_x, subset_index, candidate):
@@ -1353,6 +1356,9 @@ class SelectSensor:
             discretize_x (np.ndarray, n = 3): for each pair of (sensor, transmitter), discretize the gaussian distribution
             sensor_index (int): the X_e in the paper, a candidate sensor
         '''
+        import warnings
+        warnings.filterwarnings("ignore")                   # get rid of annoying runtime warnings such as devide by zero
+
         prob_x = np.zeros(len(discretize_x[0, 0]))          # compute the probability of x
         x_num = len(discretize_x[0, 0])
         for i in range(x_num):
@@ -1393,14 +1399,12 @@ class SelectSensor:
             data = []
             for index in subset_index:
                 sensor = self.sensors[index]
-                #mean, std = self.means_stds.get((true_x, true_y, sensor.x, sensor.y))
-                mean = self.means[true_x + self.grid_len * true_y, sensor.index]
-                std = self.stds[true_x + self.grid_len * true_y, sensor.index]
-
+                mean = self.means[true_x*self.grid_len + true_y, sensor.index]
+                std = self.stds[true_x*self.grid_len + true_y, sensor.index]
                 data.append(np.random.normal(mean, std))
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
-                self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y]
+                self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y] # don't care about
             #self.print_grid(self.grid_posterior)
             max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
             for max_post in max_posterior:  # there might be multiple places with the same highest posterior
