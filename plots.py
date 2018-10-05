@@ -86,9 +86,9 @@ def figure_2a(selectsensor):
     #print('random:', time.time()-start)
     #save_data(plot_data, 'plot_data64/Online_Random.csv')
 
-    filename_acc = 'plot_data16/online_greedy_homo/acc_CAITAO.csv'
-    filename_mi = 'plot_data16/online_greedy_homo/mi_CAITAO.csv'
-    for i in range(10):
+    filename_acc = 'plot_data32/online_greedy_homo/acc_CAITAO.csv'
+    filename_mi = 'plot_data32/online_greedy_homo/mi_CAITAO.csv'
+    for i in range(1):
         start = time.time()
         plot_data, mi = selectsensor.select_online_greedy_p(4, 4, -1) # 32 grid: 378
         print('greedy:', time.time()-start)
