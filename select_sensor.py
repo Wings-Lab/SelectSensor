@@ -1085,7 +1085,7 @@ class SelectSensor:
             plot_data (list)
         '''
         if true_index == -1:
-            random.seed()
+            random.seed(0)
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
@@ -1095,12 +1095,15 @@ class SelectSensor:
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         #self.print_grid(self.grid_priori)
+        start = time.time()
         discretize_x = self.discretize(bin_num=200, cores=cores)
+        print('discretize x', time.time() - start)
         cost = 0
         subset_to_compute = []
         mi = []                 # save the mutual informations
+        start = time.time()
         while cost < budget and complement_index:
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
+            candidate_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_greedy)(discretize_x[candidate], subset_index, candidate) \
                                                                for candidate in complement_index)
 
             best_candidate = candidate_results[0][0]
@@ -1120,8 +1123,8 @@ class SelectSensor:
             self.update_hypothesis(true_transmitter, subset_index)
             #self.print_grid(self.grid_priori)
             cost += 1
-
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
+        print('MI time', time.time() - start)
+        subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
                                                 for subset_index in subset_to_compute)
 
         plot_data = []
@@ -1134,7 +1137,7 @@ class SelectSensor:
     def inner_online_greedy(self, discretize_x, subset_index, candidate):
         '''The inner loop for online greedy version 2
         Args:
-            discretize_x (np.ndarray, n = 3)
+            discretize_x (np.ndarray, n = 2)
             subset_index (list)
             candidate (int)
         '''
@@ -1210,7 +1213,7 @@ class SelectSensor:
         discretize_x = np.zeros((len(self.sensors), self.grid_len * self.grid_len, bin_num))
 
         discretize_x = np.memmap(output_filename_memmap, dtype=discretize_x.dtype, shape=discretize_x.shape, mode='w+')
-        np.array(Parallel(n_jobs=cores)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors))
+        Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors)
 
         return discretize_x
 
@@ -1359,16 +1362,16 @@ class SelectSensor:
         import warnings
         warnings.filterwarnings("ignore")                   # get rid of annoying runtime warnings such as devide by zero
 
-        prob_x = np.zeros(len(discretize_x[0, 0]))          # compute the probability of x
-        x_num = len(discretize_x[0, 0])
+        prob_x = np.zeros(len(discretize_x[0]))          # compute the probability of x
+        x_num = len(discretize_x[0])
         for i in range(x_num):
-            prob_x[i] = np.dot(discretize_x[sensor_index, :, i], self.grid_priori.flatten())
+            prob_x[i] = np.dot(discretize_x[:, i], self.grid_priori.flatten())
 
         summation = 0                                       # compute the mutual information
         for trans in self.transmitters:
             x = trans.hypothesis // self.grid_len
             y = trans.hypothesis % self.grid_len
-            prob_xh = discretize_x[sensor_index, trans.hypothesis, :]
+            prob_xh = discretize_x[trans.hypothesis, :]
             log_term = np.log2(prob_xh / prob_x)
             log_term[log_term == np.inf] = 0
             summation_term = self.grid_priori[x, y] * log_term * prob_xh
@@ -1805,9 +1808,9 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data16/heterogeneous/cov', 'data16/heterogeneous/sensors', 'data16/heterogeneous/hypothesis')
+    selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2b(selectsensor)
+    plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
