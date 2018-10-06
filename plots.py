@@ -76,39 +76,17 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-<<<<<<< HEAD
-    #start = time.time()
-    #plot_data = selectsensor.select_online_nearest(24, 48, 1340)
-    #print('nearest:', time.time()-start)
-    #save_data(plot_data, 'plot_data64/Online_Nearest.csv')
-
-    #start = time.time()
-    #plot_data = selectsensor.select_online_random(144, 48, 1340)
-    #print('random:', time.time()-start)
-    #save_data(plot_data, 'plot_data64/Online_Random.csv')
-
-    filename_acc = 'plot_data64/online_greedy_homo/acc_CAITAO.csv'
-    filename_mi = 'plot_data64/online_greedy_homo/mi_CAITAO.csv'
-
-    for i in range(20):
-        start = time.time()
-        plot_data, mi = selectsensor.select_online_greedy_p2(12, 20, -1) # 32 grid: 378
-        print('greedy p2:', time.time()-start)
-=======
-    filename_acc = 'plot_data32/online_random_homo/acc_CAITAO.csv'
+    filename_acc = 'plot_data64/online_random_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_random(12, 4, -1)
+        plot_data = selectsensor.select_online_random(100, 20, -1)
         print('random:', time.time()-start)
->>>>>>> a91f64f5c146ceda63f2e355fd41b745cb58d66a
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
-<<<<<<< HEAD
-=======
-    filename_acc = 'plot_data32/online_nearest_homo/acc_CAITAO.csv'
+    filename_acc = 'plot_data64/online_nearest_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_nearest(8, 4, -1)
+        plot_data = selectsensor.select_online_nearest(30, 20, -1)
         print('nearest:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
@@ -121,7 +99,6 @@ def figure_2a(selectsensor):
     #    save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
     #    save_mi(mi, filename_mi.replace('CAITAO', str(i)))
 
->>>>>>> a91f64f5c146ceda63f2e355fd41b745cb58d66a
 
 def figure_2b(selectsensor):
     '''Y - empirical accuracy
