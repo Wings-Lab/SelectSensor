@@ -1543,7 +1543,7 @@ class SelectSensor:
             complement_index.remove(select)
             cost += 1
 
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
         print(subset_results)
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])
@@ -1650,7 +1650,7 @@ class SelectSensor:
             self.print_grid(self.grid_priori)
             cost += 1
 
-        subset_results = Parallel(n_jobs=cores)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
+        subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) for subset_index in subset_to_compute)
         print(subset_results)
         for result in subset_results:
             plot_data.append([str(result[0]), len(result[0]), result[1]])

@@ -79,14 +79,14 @@ def figure_2a(selectsensor):
     filename_acc = 'plot_data64/online_random_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_random(100, 20, -1)
+        plot_data = selectsensor.select_online_random(80, 20, -1)
         print('random:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
     filename_acc = 'plot_data64/online_nearest_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_nearest(30, 20, -1)
+        plot_data = selectsensor.select_online_nearest(30, 10, -1)
         print('nearest:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
