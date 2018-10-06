@@ -1145,7 +1145,7 @@ class SelectSensor:
             plot_data (list)
         '''
         if true_index == -1:
-            random.seed(0)
+            random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
@@ -1904,7 +1904,7 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
