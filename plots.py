@@ -76,32 +76,28 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
-    #start = time.time()
-    #plot_data = selectsensor.select_online_nearest(24, 48, 1340)
-    #print('nearest:', time.time()-start)
-    #save_data(plot_data, 'plot_data64/Online_Nearest.csv')
-
-    #start = time.time()
-    #plot_data = selectsensor.select_online_random(144, 48, 1340)
-    #print('random:', time.time()-start)
-    #save_data(plot_data, 'plot_data64/Online_Random.csv')
-
-    filename_acc = 'plot_data32/online_greedy_homo/acc_CAITAO.csv'
-    filename_mi = 'plot_data32/online_greedy_homo/mi_CAITAO.csv'
-
-    for i in range(6, 7):
+    filename_acc = 'plot_data32/online_random_homo/acc_CAITAO.csv'
+    for i in range(2):
         start = time.time()
-        plot_data, mi = selectsensor.select_online_greedy_p(1, 4, -1) # 32 grid: 378
-        print('greedy p1:', time.time()-start)
+        plot_data = selectsensor.select_online_random(12, 4, -1)
+        print('random:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
-        save_mi(mi, filename_mi.replace('CAITAO', str(i)))
 
-    for i in range(7, 8):
+    filename_acc = 'plot_data32/online_nearest_homo/acc_CAITAO.csv'
+    for i in range(2):
         start = time.time()
-        plot_data, mi = selectsensor.select_online_greedy_p2(1, 40, -1) # 32 grid: 378
-        print('greedy p2:', time.time()-start)
-        save_data(plot_data, filename_acc.replace('_CAITAO', str(i)))
-        save_mi(mi, filename_mi.replace('_CAITAO', str(i)))
+        plot_data = selectsensor.select_online_nearest(8, 4, -1)
+        print('nearest:', time.time()-start)
+        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+
+    #filename_acc = 'plot_data32/online_greedy_homo/acc_CAITAO.csv'
+    #filename_mi = 'plot_data32/online_greedy_homo/mi_CAITAO.csv'
+    #for i in range(6, 7):
+    #    start = time.time()
+    #    plot_data, mi = selectsensor.select_online_greedy_p(1, 4, -1) # 32 grid: 378
+    #    print('greedy p1:', time.time()-start)
+    #    save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+    #    save_mi(mi, filename_mi.replace('CAITAO', str(i)))
 
 
 def figure_2b(selectsensor):

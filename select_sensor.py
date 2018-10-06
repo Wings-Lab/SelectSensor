@@ -1515,12 +1515,16 @@ class SelectSensor:
         return float(success)/test_num
 
 
-    def select_online_random(self, budget, cores, true_index):
+    def select_online_random(self, budget, cores, true_index=-1):
         '''The online random selection
         Args:
             budget (int):
             cores (int):
         '''
+        if true_index == -1:
+            random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
+
         self.set_priori()
         random.seed(5)
         np.random.seed(5)
@@ -1596,12 +1600,16 @@ class SelectSensor:
         return plot_data
 
 
-    def select_online_nearest(self, budget, cores, true_index):
+    def select_online_nearest(self, budget, cores, true_index=-1):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Args:
             budget (int):
             cores (int):
         '''
+        if true_index == -1:
+            random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
+
         self.set_priori()
         plot_data = []
         random.seed(1)
