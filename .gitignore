@@ -15,6 +15,6 @@ log*
 select_sensor.py.lprof
 data64/
 scalability/gl*
-nohup.out.*
+nohup.out*
 joblib_memmap/
 scalability/

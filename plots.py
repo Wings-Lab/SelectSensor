@@ -76,28 +76,29 @@ def figure_2a(selectsensor):
        Online + Homogeneous
        Algorithm - greedy + nearest + random
     '''
+    '''
     filename_acc = 'plot_data64/online_random_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_random(100, 20, -1)
+        plot_data = selectsensor.select_online_random(80, 20, -1)
         print('random:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
     filename_acc = 'plot_data64/online_nearest_homo/acc_CAITAO.csv'
     for i in range(2):
         start = time.time()
-        plot_data = selectsensor.select_online_nearest(30, 20, -1)
+        plot_data = selectsensor.select_online_nearest(30, 10, -1)
         print('nearest:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
-
-    #filename_acc = 'plot_data32/online_greedy_homo/acc_CAITAO.csv'
-    #filename_mi = 'plot_data32/online_greedy_homo/mi_CAITAO.csv'
-    #for i in range(6, 7):
-    #    start = time.time()
-    #    plot_data, mi = selectsensor.select_online_greedy_p(1, 4, -1) # 32 grid: 378
-    #    print('greedy p1:', time.time()-start)
-    #    save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
-    #    save_mi(mi, filename_mi.replace('CAITAO', str(i)))
+    '''
+    filename_acc = 'plot_data64/online_greedy_homo/acc_CAITAO.csv'
+    filename_mi = 'plot_data64/online_greedy_homo/mi_CAITAO.csv'
+    for i in range(14, 16):
+        start = time.time()
+        plot_data, mi = selectsensor.select_online_greedy_p2(12, 12, -1) # 32 grid: 378
+        print('greedy p2:', time.time()-start)
+        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+        save_mi(mi, filename_mi.replace('CAITAO', str(i)))
 
 
 def figure_2b(selectsensor):
