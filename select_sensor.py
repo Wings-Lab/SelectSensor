@@ -2020,9 +2020,9 @@ def main():
 
     #real data
     #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
-    selectsensor.scalability_budget_online([1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
-    selectsensor.scalability_hypothesis_online([16, 24])#, 32, 40, 48, 56, 64, 72, 80])
-    selectsensor.scalability_sensor_online([50, 100])#, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+    selectsensor.scalability_budget_online([1, 5, 10, 20, 30, 40, 50, 60, 70, 80])
+    selectsensor.scalability_hypothesis_online([16, 24, 32, 40, 48, 56, 64, 72, 80])
+    selectsensor.scalability_sensor_online([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
 
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #plots.figure_2a(selectsensor)
