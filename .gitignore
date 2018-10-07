@@ -17,3 +17,4 @@ data64/
 scalability/gl*
 nohup.out.*
 joblib_memmap/
+scalability/

@@ -1086,7 +1086,7 @@ class SelectSensor:
             plot_data (list)
         '''
         if true_index == -1:
-            random.seed(0)
+            random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
@@ -1156,7 +1156,8 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)]
         #self.print_grid(self.grid_priori)
         start = time.time()
-        discretize_x = self.discretize2(bin_num=100, cores=cores)
+        #discretize_x = self.discretize2(bin_num=100, cores=cores)  # discretize2 for repeating experiment
+        discretize_x = self.discretize3(bin_num=100, cores=cores)   # discretize3 for scalability test
         print('discretize x', time.time() - start)
         cost = 0
         subset_to_compute = []
@@ -1182,6 +1183,7 @@ class SelectSensor:
             #self.print_grid(self.grid_priori)
             cost += 1
         print('MI time', time.time() - start)
+        return  # for scalability test, don't need to compute the accuracy, so return here
         subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
                                                 for subset_index in subset_to_compute)
 
@@ -1249,6 +1251,7 @@ class SelectSensor:
         '''Discretize the likelihood of data P(X|h) for each hypothesis
         Args:
             bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
         Return:
             (numpy.ndarray): n = 3
         '''
@@ -1278,8 +1281,10 @@ class SelectSensor:
 
     def discretize2(self, bin_num, cores):
         '''Discretize the likelihood of data P(X|h) for each hypothesis
+        This version of discretization is for single core online greedy with repeating experiments
         Args:
             bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
         Return:
             (numpy.ndarray): n = 3
         '''
@@ -1311,6 +1316,40 @@ class SelectSensor:
         discretize_x_np = np.array(discretize_x)
         dump(discretize_x_np, discretize_x_filename)
         os.remove(output_filename_memmap)
+        return discretize_x_np
+
+
+    def discretize3(self, bin_num, cores):
+        '''Discretize the likelihood of data P(X|h) for each hypothesis
+        This version of discretization is for single core online greedy with scalability test
+        Args:
+            bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
+        Return:
+            (numpy.ndarray): n = 3
+        '''
+        folder = './joblib_memmap'
+        try:
+            os.mkdir(folder)
+        except FileExistsError:
+            pass
+
+        min_mean = np.min(self.means)
+        max_mean = np.max(self.means)
+        max_std = np.max(self.stds)
+        X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
+
+        data_filename_memmap = os.path.join(folder, 'X_memmap')
+        dump(X, data_filename_memmap)
+        X = load(data_filename_memmap, mmap_mode='r')
+
+        output_filename_memmap = os.path.join(folder, 'output_memmap')
+        discretize_x = np.zeros((len(self.sensors), self.grid_len * self.grid_len, bin_num))
+
+        discretize_x = np.memmap(output_filename_memmap, dtype=discretize_x.dtype, shape=discretize_x.shape, mode='w+')
+        Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors)
+
+        discretize_x_np = np.array(discretize_x)
         return discretize_x_np
 
 
@@ -1504,7 +1543,6 @@ class SelectSensor:
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
                 self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y] # don't care about
-            #self.print_grid(self.grid_posterior)
             max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
             for max_post in max_posterior:  # there might be multiple places with the same highest posterior
                 if max_post[0] == true_x and max_post[1] == true_y:
@@ -1906,15 +1944,88 @@ class SelectSensor:
             print(time.time()-start, end='\n', file=sensor_file)
 
 
+    def scalability_budget_online(self, budgets):
+        '''default # of hypothesis = 32^2 = 1024
+           default # of sensors = 100
+        Args:
+            budgets (list): a list of budgets
+        '''
+        budget_file = open('plot_data64/budget_online', 'w')
+        self.grid_len = 32
+        self.sen_num = 100
+        self.init_transmitters()
+        self.set_priori()
+        self.init_from_real_data('scalability/gl32_s100/cov', 'scalability/gl32_s100/sensors', 'scalability/gl32_s100/hypothesis')
+        for budget in budgets:
+            print(budget, end=',', file=budget_file)
+            start = time.time()
+            self.select_online_greedy_p2(budget, 40)
+            print(time.time()-start, end='\n', file=budget_file)
+
+
+    def scalability_hypothesis_online(self, grid_lens):
+        '''default # of sensors = 100
+           default budget = 20, online need less budget than offline
+        Args:
+            grid_lens (list): a list of grid_lens
+        '''
+        cov_filename = 'scalability/glCAITAO_s100/cov'
+        sensors_filename = 'scalability/glCAITAO_s100/sensors'
+        hypothesis_filename = 'scalability/glCAITAO_s100/hypothesis'
+        hypothesis_file = open('plot_data64/hypothesis_online', 'w')
+        self.sen_num = 100
+        for grid_len in grid_lens:
+            cov = cov_filename.replace('CAITAO', str(grid_len))
+            sensors = sensors_filename.replace('CAITAO', str(grid_len))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(grid_len))
+            self.grid_len = grid_len
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(grid_len*grid_len, end=',', file=hypothesis_file)
+            start = time.time()
+            self.select_online_greedy_p2(20, 40)
+            print(time.time()-start, end='\n', file=hypothesis_file)
+
+
+    def scalability_sensor_online(self, sensor_nums):
+        '''default # of hypothesis = 32^2 = 1024
+           default budget = 20
+        Args:
+            sensors (list): a list of # of sensors
+        '''
+        cov_filename = 'scalability/gl32_sCAITAO/cov'
+        sensors_filename = 'scalability/gl32_sCAITAO/sensors'
+        hypothesis_filename = 'scalability/gl32_sCAITAO/hypothesis'
+        sensor_file = open('plot_data64/sensor_online', 'w')
+        self.grid_len = 32
+        for sensor_num in sensor_nums:
+            cov = cov_filename.replace('CAITAO', str(sensor_num))
+            sensors = sensors_filename.replace('CAITAO', str(sensor_num))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(sensor_num))
+            self.sen_num = sensor_num
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(sensor_num, end=',', file=sensor_file)
+            start = time.time()
+            self.select_online_greedy_p2(20, 40)
+            print(time.time()-start, end='\n', file=sensor_file)
+
+
 def main():
     '''main
     '''
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
+    selectsensor.scalability_budget_online([1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
+    selectsensor.scalability_hypothesis_online([16, 24])#, 32, 40, 48, 56, 64, 72, 80])
+    selectsensor.scalability_sensor_online([50, 100])#, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2a(selectsensor)
+    #plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
