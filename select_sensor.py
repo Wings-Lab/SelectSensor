@@ -466,6 +466,8 @@ class SelectSensor:
             plot_data.append([len(subset_index), base_ot_approx, 0]) # don't compute real o_t now, delay to after all the subsets are selected
             complement_sensors.remove(best_sensor)
             cost += 1
+            if base_ot_approx > 0.9999999999999:
+                break
         print('number of o_t_approx', counter)
         return # for scalability test, we don't need to compute the real Ot in the scalability test.
         subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot_cpu)(subset_index) for subset_index in subset_to_compute)
@@ -2068,8 +2070,8 @@ def main():
     #real data
     #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
 
-    selectsensor.scalability_budget('CPU', [1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
-    selectsensor.scalability_hypothesis('CPU', [16, 24])#, 32, 40, 48, 56, 64, 72, 80])
+    #selectsensor.scalability_budget('CPU', [1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
+    #selectsensor.scalability_hypothesis('CPU', [16, 24])#, 32, 40, 48, 56, 64, 72, 80])
     selectsensor.scalability_sensor('CPU', [50, 100])#, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
 
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
