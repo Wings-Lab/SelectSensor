@@ -1074,18 +1074,17 @@ class SelectSensor:
         '''
         if true_index == -1:
             random.seed()
+            np.random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
-        random.seed(1)
-        np.random.seed(2)
+
         plot_data = []
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('\ntrue transmitter', true_transmitter)
 
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        #self.print_grid(self.grid_priori)
-        discretize_x = self.discretize(bin_num=200, cores=cores)
+        discretize_x = self.discretize2(bin_num=100, cores=cores)
         subset_to_compute = []
         cost = 0
         cost_list = []
@@ -1099,20 +1098,17 @@ class SelectSensor:
             if not option:
                 break
 
-            candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_online_greedy)(discretize_x, subset_index, candidate) \
-                                                       for candidate in option)
-
-            best_candidate = candidate_results[0][0]
-            cost_of_candidate = self.sensors[best_candidate].cost
-            maximum = candidate_results[0][1]/cost_of_candidate      # the metric is MI/cost
-            for candidate in candidate_results:
-                mi = candidate[1]
-                cost_of_candidate = self.sensors[candidate[0]].cost
-                mi_cost = mi/cost_of_candidate                       # the metric is MI/cost
-                #print(candidate[0], mi, cost_of_candidate, mi_cost)
+            maximum = -1
+            best_candidate = -1
+            for candidate in option:
+                mi = self.mutual_information(discretize_x, candidate)
+                cost_of_candidate = self.sensors[candidate].cost
+                mi_cost = mi/cost_of_candidate
+                #print(candidate, mi, cost_of_candidate, mi_cost)
                 if mi_cost > maximum:
                     maximum = mi_cost
-                    best_candidate = candidate[0]
+                    best_candidate = candidate
+
             ordered_insert(subset_index, best_candidate)
             complement_index.remove(best_candidate)
             self.print_subset(subset_index)
@@ -1137,7 +1133,7 @@ class SelectSensor:
         '''(Parallel version) Version 2 of online greedy selection with mutual_information version 2
         Args:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
-            cores (int): number of cores used in the parallezation
+            cores (int): number of cores used in the parallelization
             true_index (int): the true transmitter
         Return:
             plot_data (list)
@@ -1152,7 +1148,6 @@ class SelectSensor:
         print('\ntrue transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        #self.print_grid(self.grid_priori)
         start = time.time()
         discretize_x = self.discretize(bin_num=100, cores=cores)
         print('discretize x', time.time() - start)
@@ -1194,6 +1189,7 @@ class SelectSensor:
 
     def select_online_greedy_p2(self, budget, cores, true_index=-1):
         '''(Parallel version) Version 3 of online greedy selection with mutual_information version 4
+           Comparing to select_online_greedy_p(), this version do not use joblib during calculating the mutual information
         Args:
             budget (int): amount of budget, in the homo case, every sensor has budget=1
             cores (int): number of cores used in the parallezation
@@ -1211,7 +1207,6 @@ class SelectSensor:
         print('\ntrue transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
-        #self.print_grid(self.grid_priori)
         start = time.time()
         #discretize_x = self.discretize2(bin_num=100, cores=cores)  # discretize2 for repeating experiment
         discretize_x = self.discretize3(bin_num=100, cores=cores)   # discretize3 for scalability test
@@ -1219,7 +1214,6 @@ class SelectSensor:
         cost = 0
         subset_to_compute = []
         mi_list = []                 # save the mutual informations
-        start = time.time()
         while cost < budget and complement_index:
             maximum = -1
             best_candidate = -1
@@ -1239,7 +1233,6 @@ class SelectSensor:
             self.update_hypothesis(true_transmitter, subset_index)
             #self.print_grid(self.grid_priori)
             cost += 1
-        print('MI time', time.time() - start)
         return  # for scalability test, don't need to compute the accuracy, so return here
         subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
                                                 for subset_index in subset_to_compute)
@@ -1653,15 +1646,18 @@ class SelectSensor:
         return (subset_index, accuracy)
 
 
-    def select_online_random_hetero(self, budget, cores, true_index):
+    def select_online_random_hetero(self, budget, cores, true_index=-1):
         '''The online random selection. heterogeneous version
         Args:
             budget (int):
             cores (int):
             cost_filename (str):
         '''
-        random.seed(1)
-        np.random.seed(2)
+        if true_index == -1:
+            random.seed()
+            np.random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
+
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
@@ -1775,16 +1771,20 @@ class SelectSensor:
         return np.array(distances)
 
 
-    def select_online_nearest_hetero(self, budget, cores, true_index):
+    def select_online_nearest_hetero(self, budget, cores, true_index=-1):
         '''Online selection using the updated prior information by choosing the 'nearest' sensor
         Args:
             budget (int):
             cores (int):
         '''
+        if true_index == -1:
+            random.seed()
+            np.random.seed()
+            true_index = random.randint(0, self.grid_len * self.grid_len)
+
         self.set_priori()
         plot_data = []
-        random.seed(1)
-        np.random.seed(2)
+
         true_transmitter = self.transmitters[true_index]         # in online selection, there is one true transmitter somewhere
         print('true transmitter', true_transmitter)
 
@@ -1800,7 +1800,7 @@ class SelectSensor:
         subset_index = [first_index]
 
         self.update_hypothesis(true_transmitter, subset_index)  # update the priori based on the first sensor
-        self.print_grid(self.grid_priori)
+        #self.print_grid(self.grid_priori)
 
         complement_index = [i for i in range(self.sen_num)]
         complement_index.remove(first_index)
@@ -1809,8 +1809,16 @@ class SelectSensor:
         cost_list = [cost]
 
         while cost < budget and complement_index:
+            option = []
+            for index in complement_index:
+                temp_cost = self.sensors[index].cost
+                if cost + temp_cost <= budget:
+                    option.append(index)
+            if not option:
+                break
+
             print(cost, budget)
-            distances = self.weighted_distance_priori(complement_index)
+            distances = self.weighted_distance_priori(option)
             max_dist_cost = distances[0] / self.sensors[complement_index[0]].cost
             best_candidate = complement_index[0]
             for dist, sen_index in zip(distances, complement_index):
@@ -1825,7 +1833,7 @@ class SelectSensor:
             subset_to_compute.append(copy.deepcopy(subset_index))
             self.print_subset(subset_index)
             self.update_hypothesis(true_transmitter, subset_index)
-            self.print_grid(self.grid_priori)
+            #self.print_grid(self.grid_priori)
             cost += self.sensors[best_candidate].cost
             cost_list.append(cost)
 
@@ -2060,26 +2068,27 @@ class SelectSensor:
             print(time.time()-start, end='\n', file=sensor_file)
 
 
-def main():
-    '''main
+def scalability_test():
+    '''scalability test
     '''
     selectsensor = SelectSensor('config.json')
-
-    #real data
-    #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
-
     selectsensor.scalability_budget('CPU', [1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
     selectsensor.scalability_hypothesis('CPU', [16, 24])#, 32, 40, 48, 56, 64, 72, 80])
     selectsensor.scalability_sensor('CPU', [50, 100])#, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
 
+
+def main():
+    '''main
+    '''
+    selectsensor = SelectSensor('config.json')
+    selectsensor.init_from_real_data('data64/heterogeneous/cov', 'data64/heterogeneous/sensors', 'data64/heterogeneous/hypothesis')
+    plots.figure_2b(selectsensor)
+
+
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     #plots.figure_2a(selectsensor)
-    #plots.figure_2a(selectsensor)
+
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
-    #selectsensor.scalability_budget([90])
-    #selectsensor.scalability_hypothesis([16, 24, 32, 40, 48])
-    #selectsensor.scalability_hypothesis([80])
-    #selectsensor.scalability_sensor([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
 
     #print('[302, 584]', selectsensor.o_t_approx_host(np.array([302, 584])))  # two different subset generating the same o_t_approx
     #print('[383, 584]', selectsensor.o_t_approx_host(np.array([383, 584])))
