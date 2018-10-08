@@ -301,37 +301,6 @@ class SelectSensor:
         return 1 - prob_error
 
 
-    def o_t_approximate_2(self, subset_index):
-        '''Not the accurate O_T, but apprioximating O_T. So that we have a good propertiy of submodular
-        Args:
-            subset_index (list): a subset of sensors T, needs guarantee sorted
-        '''
-        if not subset_index:  # empty sequence are false
-            return -99999999999.
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)        # inverse
-        prob_error = 0                              # around 3% speed up by replacing [] to float
-        i = 0
-        for transmitter_i in self.transmitters:
-            i_x, i_y = transmitter_i.x, transmitter_i.y
-            transmitter_i.set_mean_vec_sub(subset_index)
-            prob_i = 0
-            j = 0
-            for transmitter_j in self.transmitters:
-                j_x, j_y = transmitter_j.x, transmitter_j.y
-                if i_x == j_x and i_y == j_y:
-                    continue
-                transmitter_j.set_mean_vec_sub(subset_index)
-                pj_pi = transmitter_j.mean_vec_sub - transmitter_i.mean_vec_sub
-                tmp = norm.sf(0.5 * math.sqrt(np.dot(np.dot(pj_pi, sub_cov_inv), pj_pi)))
-                prob_i += tmp
-                print((i, j, tmp*self.grid_priori[i_x][i_y]))
-                j += 1
-            prob_error += prob_i * self.grid_priori[i_x][i_y]
-            i += 1
-        return 1 - prob_error
-
-
     def select_offline_greedy_p(self, budget, cores):
         '''(Parallel version) Select a subset of sensors greedily. offline + homo version
         Args:
@@ -373,8 +342,8 @@ class SelectSensor:
         return plot_data
 
 
-    def select_offline_greedy_p_lazy(self, budget, cores, cuda_kernal=None):
-        '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version
+    def select_offline_greedy_p_lazy(self, budget, cores, cuda_kernal):
+        '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version using ** GPU **
         Args:
             budget (int): budget constraint
             cores (int): number of cores for parallelzation
@@ -446,6 +415,67 @@ class SelectSensor:
         return plot_data
 
 
+    def select_offline_greedy_p_lazy_cpu(self, budget, cores):
+        '''(Parallel + Lazy greedy) Select a subset of sensors greedily. offline + homo version using ** CPU **
+        Attributes:
+            budget (int): budget constraint
+            cores (int): number of cores for parallelzation
+        Return:
+            (list): an element is [str, int, float],
+                    where str is the list of subset_index, int is # of sensors, float is O_T
+        '''
+        counter = 0
+        base_ot_approx = 1 - 0.5*len(self.transmitters)
+        plot_data = []
+        cost = 0                                            # |T| in the paper
+        subset_index = []                                   # T   in the paper
+        complement_sensors = copy.deepcopy(self.sensors)    # S\T in the paper
+        subset_to_compute = []
+        while cost < budget and complement_sensors:
+            best_candidate = -1
+            best_sensor = None
+            complement_sensors.sort()   # sorting the gain descendingly
+            new_base_ot_approx = 0
+            #for sensor in complement_sensors:
+            #    print((sensor.index, sensor.gain_up_bound), end=' ')
+            update, max_gain = 0, 0
+            while update < len(complement_sensors):
+                update_end = update+cores if update+cores <= len(complement_sensors) else len(complement_sensors)
+                candidiate_index = []
+                for i in range(update, update_end):
+                    candidiate_index.append(complement_sensors[i].index)
+                counter += 1
+                candidate_results = Parallel(n_jobs=cores)(delayed(self.inner_greedy_cpu)(subset_index, candidate) for candidate in candidiate_index)
+                # an element of candidate_results is a tuple - (index, o_t_approx, subsetlist)
+                for i, j in zip(range(update, update_end), range(0, cores)):  # the two range might be different, if the case, follow the first range
+                    complement_sensors[i].gain_up_bound = candidate_results[j][1] - base_ot_approx  # update the upper bound of gain
+                    if complement_sensors[i].gain_up_bound > max_gain:
+                        max_gain = complement_sensors[i].gain_up_bound
+                        best_candidate = candidate_results[j][0]
+                        best_sensor = complement_sensors[i]
+                        new_base_ot_approx = candidate_results[j][1]
+
+                if update_end < len(complement_sensors) and max_gain > complement_sensors[update_end].gain_up_bound:   # where the lazy happens
+                    print('\n***LAZY!***\n', cost, (update, update_end), len(complement_sensors), '\n')
+                    break
+                update += cores
+            base_ot_approx = new_base_ot_approx             # update the base o_t_approx for the next iteration
+            print(best_candidate, base_ot_approx, '\n\n')
+            ordered_insert(subset_index, best_candidate)    # guarantee subset_index always be sorted here
+            subset_to_compute.append(copy.deepcopy(subset_index))
+            plot_data.append([len(subset_index), base_ot_approx, 0]) # don't compute real o_t now, delay to after all the subsets are selected
+            complement_sensors.remove(best_sensor)
+            cost += 1
+        print('number of o_t_approx', counter)
+        return # for scalability test, we don't need to compute the real Ot in the scalability test.
+        subset_results = Parallel(n_jobs=len(plot_data))(delayed(self.inner_greedy_real_ot_cpu)(subset_index) for subset_index in subset_to_compute)
+
+        for i in range(len(subset_results)):
+            plot_data[i][2] = subset_results[i]
+
+        return plot_data
+
+
     def inner_greedy(self, subset_index, cuda_kernal, candidate):
         '''Inner loop for selecting candidates
         Args:
@@ -456,9 +486,44 @@ class SelectSensor:
         '''
         subset_index2 = copy.deepcopy(subset_index)
         ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
-        #o_t = self.o_t_approximate(subset_index2)
-        o_t = self.o_t_approx_host_2(subset_index2, cuda_kernal)
+        o_t = self.o_t_approx_host(subset_index2, cuda_kernal)
         return (candidate, o_t, subset_index2)
+
+
+    def inner_greedy_real_ot(self, subset_index):
+        '''Compute the real o_t (accruacy of prediction)
+        Args:
+            subset_index (list):
+        Return:
+            (tuple): (index, o_t_approx, new subset_index)
+        '''
+        o_t = self.o_t_host(subset_index)
+        return o_t
+
+
+    def inner_greedy_cpu(self, subset_index, candidate):
+        '''Inner loop for selecting candidates
+        Args:
+            subset_index (list):
+            candidate (int):
+        Return:
+            (tuple): (index, o_t_approx, new subset_index)
+        '''
+        subset_index2 = copy.deepcopy(subset_index)
+        ordered_insert(subset_index2, candidate)     # guarantee subset_index always be sorted here
+        o_t = self.o_t_approximate(subset_index2)
+        return (candidate, o_t, subset_index2)
+
+
+    def inner_greedy_real_ot_cpu(self, subset_index):
+        '''Compute the real o_t (accruacy of prediction)
+        Args:
+            subset_index (list):
+        Return:
+            (tuple): (index, o_t_approx, new subset_index)
+        '''
+        o_t = self.o_t(subset_index)
+        return o_t
 
 
     def select_offline_greedy(self, budget):
@@ -783,14 +848,6 @@ class SelectSensor:
             return first_pass_plot_data
 
 
-    def inner_greedy_real_ot(self, subset_index):
-        '''Compute the real o_t (accruacy of prediction)
-        '''
-        #o_t = self.o_t(subset_index)
-        o_t = self.o_t_host(subset_index)
-        return o_t
-
-
     def select_offline_coverage(self, budget, cores):
         '''A coverage-based baseline algorithm
         '''
@@ -1086,7 +1143,7 @@ class SelectSensor:
             plot_data (list)
         '''
         if true_index == -1:
-            random.seed(0)
+            random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
         random.seed(1)
@@ -1156,7 +1213,8 @@ class SelectSensor:
         complement_index = [i for i in range(self.sen_num)]
         #self.print_grid(self.grid_priori)
         start = time.time()
-        discretize_x = self.discretize2(bin_num=100, cores=cores)
+        #discretize_x = self.discretize2(bin_num=100, cores=cores)  # discretize2 for repeating experiment
+        discretize_x = self.discretize3(bin_num=100, cores=cores)   # discretize3 for scalability test
         print('discretize x', time.time() - start)
         cost = 0
         subset_to_compute = []
@@ -1182,6 +1240,7 @@ class SelectSensor:
             #self.print_grid(self.grid_priori)
             cost += 1
         print('MI time', time.time() - start)
+        return  # for scalability test, don't need to compute the accuracy, so return here
         subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
                                                 for subset_index in subset_to_compute)
 
@@ -1249,6 +1308,7 @@ class SelectSensor:
         '''Discretize the likelihood of data P(X|h) for each hypothesis
         Args:
             bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
         Return:
             (numpy.ndarray): n = 3
         '''
@@ -1278,8 +1338,10 @@ class SelectSensor:
 
     def discretize2(self, bin_num, cores):
         '''Discretize the likelihood of data P(X|h) for each hypothesis
+        This version of discretization is for single core online greedy with repeating experiments
         Args:
             bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
         Return:
             (numpy.ndarray): n = 3
         '''
@@ -1311,6 +1373,40 @@ class SelectSensor:
         discretize_x_np = np.array(discretize_x)
         dump(discretize_x_np, discretize_x_filename)
         os.remove(output_filename_memmap)
+        return discretize_x_np
+
+
+    def discretize3(self, bin_num, cores):
+        '''Discretize the likelihood of data P(X|h) for each hypothesis
+        This version of discretization is for single core online greedy with scalability test
+        Args:
+            bin (int): bin size, discretize the X axis into bin # of bins
+            cores (int): number of cores
+        Return:
+            (numpy.ndarray): n = 3
+        '''
+        folder = './joblib_memmap'
+        try:
+            os.mkdir(folder)
+        except FileExistsError:
+            pass
+
+        min_mean = np.min(self.means)
+        max_mean = np.max(self.means)
+        max_std = np.max(self.stds)
+        X = np.linspace(min_mean - 3*max_std, max_mean + 3*max_std, bin_num+1)
+
+        data_filename_memmap = os.path.join(folder, 'X_memmap')
+        dump(X, data_filename_memmap)
+        X = load(data_filename_memmap, mmap_mode='r')
+
+        output_filename_memmap = os.path.join(folder, 'output_memmap')
+        discretize_x = np.zeros((len(self.sensors), self.grid_len * self.grid_len, bin_num))
+
+        discretize_x = np.memmap(output_filename_memmap, dtype=discretize_x.dtype, shape=discretize_x.shape, mode='w+')
+        Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_discretize)(X, bin_num, sensor, discretize_x) for sensor in self.sensors)
+
+        discretize_x_np = np.array(discretize_x)
         return discretize_x_np
 
 
@@ -1504,7 +1600,6 @@ class SelectSensor:
             for trans in self.transmitters:
                 likelihood = trans.multivariant_gaussian.pdf(data)
                 self.grid_posterior[trans.x][trans.y] = likelihood * self.grid_priori[trans.x][trans.y] # don't care about
-            #self.print_grid(self.grid_posterior)
             max_posterior = np.argwhere(self.grid_posterior == np.amax(self.grid_posterior))
             for max_post in max_posterior:  # there might be multiple places with the same highest posterior
                 if max_post[0] == true_x and max_post[1] == true_y:
@@ -1756,34 +1851,7 @@ class SelectSensor:
         self.meanvec_array = np.array(mylist)
 
 
-    def o_t_approx_host(self, subset_index):
-        '''host code for o_t_approx.
-        Args:
-            subset_index (np.ndarray, n=1): index of some sensors
-        Return:
-            (float): o_t_approx
-        '''
-        n_h = len(self.transmitters)   # number of hypotheses/transmitters
-        sub_cov = self.covariance_sub(subset_index)
-        sub_cov_inv = np.linalg.inv(sub_cov)           # inverse
-        d_meanvec_array = cuda.to_device(self.meanvec_array)
-        d_subset_index = cuda.to_device(subset_index)
-        d_sub_cov_inv = cuda.to_device(sub_cov_inv)
-        d_results = cuda.device_array((n_h, n_h), np.float64)
-
-        threadsperblock = (self.TPB, self.TPB)
-        blockspergrid_x = math.ceil(n_h/threadsperblock[0])
-        blockspergrid_y = math.ceil(n_h/threadsperblock[1])
-        blockspergrid = (blockspergrid_x, blockspergrid_y)
-        priori = self.grid_priori[0][0]                    # priori is uniform, equal everywhere
-
-        o_t_approx_kernal[blockspergrid, threadsperblock](d_meanvec_array, d_subset_index, d_sub_cov_inv, priori, d_results)
-
-        results = d_results.copy_to_host()
-        return 1 - results.sum()
-
-
-    def o_t_approx_host_2(self, subset_index, cuda_kernal):
+    def o_t_approx_host(self, subset_index, cuda_kernal):
         '''host code for o_t_approx.
         Args:
             subset_index (np.ndarray, n=1): index of some sensors
@@ -1811,7 +1879,6 @@ class SelectSensor:
         #print_results(results)
         return 1 - results.sum()
 
-
     #@profile
     def o_t_host(self, subset_index):
         '''host code for o_t.
@@ -1837,13 +1904,15 @@ class SelectSensor:
         return np.sum(results.prod(axis=1)*self.grid_priori[0][0])
 
 
-    def scalability_budget(self, budgets):
-        '''default # of hypothesis = 32^2 = 1024
+    def scalability_budget(self, processor, budgets):
+        '''Scalability test of budget for offline homo greedy selection.
+           default # of hypothesis = 32^2 = 1024
            default # of sensors = 100
         Args:
+            processor (str): 'CPU' or 'GPU'
             budgets (list): a list of budgets
         '''
-        budget_file = open('plot_data64/budget_', 'w')
+        budget_file = open('plot_data64/budget_off_CPU', 'w')
         self.grid_len = 32
         self.sen_num = 100
         self.init_transmitters()
@@ -1852,20 +1921,25 @@ class SelectSensor:
         for budget in budgets:
             print(budget, end=',', file=budget_file)
             start = time.time()
-            self.select_offline_greedy_p_lazy(budget, 12, o_t_approx_kernal)
+            if processor == 'CPU':
+                self.select_offline_greedy_p_lazy_cpu(budget, 40)
+            elif processor == 'GPU':
+                self.select_offline_greedy_p_lazy(budget, 12, o_t_approx_kernal)
             print(time.time()-start, end='\n', file=budget_file)
 
 
-    def scalability_hypothesis(self, grid_lens):
-        '''default # of sensors = 100
+    def scalability_hypothesis(self, processor, grid_lens):
+        '''Scalability test of hypothesis for offline homo greedy selection.
+           default # of sensors = 100
            default budget = 40
         Args:
+            processor (str): 'CPU' or 'GPU'
             grid_lens (list): a list of grid_lens
         '''
+        hypothesis_file = open('plot_data64/hypothesis_off_CPU', 'w')
         cov_filename = 'scalability/glCAITAO_s100/cov'
         sensors_filename = 'scalability/glCAITAO_s100/sensors'
         hypothesis_filename = 'scalability/glCAITAO_s100/hypothesis'
-        hypothesis_file = open('plot_data64/hypothesis2', 'w')
         self.sen_num = 100
         for grid_len in grid_lens:
             cov = cov_filename.replace('CAITAO', str(grid_len))
@@ -1877,20 +1951,25 @@ class SelectSensor:
             self.init_from_real_data(cov, sensors, hypothesis)
             print(grid_len*grid_len, end=',', file=hypothesis_file)
             start = time.time()
-            self.select_offline_greedy_p_lazy(40, 6, o_t_approx_kernal)
+            if processor == 'CPU':
+                self.select_offline_greedy_p_lazy_cpu(40, 40)
+            elif processor == 'GPU':
+                self.select_offline_greedy_p_lazy(40, 6, o_t_approx_kernal)
             print(time.time()-start, end='\n', file=hypothesis_file)
 
 
-    def scalability_sensor(self, sensor_nums):
-        '''default # of hypothesis = 32^2 = 1024
+    def scalability_sensor(self, processor, sensor_nums):
+        '''Scalability test of sensor for offline homo greedy selection.
+           default # of hypothesis = 32^2 = 1024
            default budget = 40
         Args:
+            processor (str): 'CPU' or 'GPU'
             sensors (list): a list of # of sensors
         '''
+        sensor_file = open('plot_data64/sensor_off_CPU', 'w')
         cov_filename = 'scalability/gl32_sCAITAO/cov'
         sensors_filename = 'scalability/gl32_sCAITAO/sensors'
         hypothesis_filename = 'scalability/gl32_sCAITAO/hypothesis'
-        sensor_file = open('plot_data64/sensor', 'w')
         self.grid_len = 32
         for sensor_num in sensor_nums:
             cov = cov_filename.replace('CAITAO', str(sensor_num))
@@ -1902,7 +1981,82 @@ class SelectSensor:
             self.init_from_real_data(cov, sensors, hypothesis)
             print(sensor_num, end=',', file=sensor_file)
             start = time.time()
-            self.select_offline_greedy_p_lazy(40, 12, o_t_approx_kernal)
+            if processor == 'CPU':
+                self.select_offline_greedy_p_lazy_cpu(40, 40)
+            elif processor == 'GPU':
+                self.select_offline_greedy_p_lazy(40, 12, o_t_approx_kernal)
+            print(time.time()-start, end='\n', file=sensor_file)
+
+
+    def scalability_budget_online(self, budgets):
+        '''Scalability test of budget for online homo greedy selection.
+           default # of hypothesis = 32^2 = 1024
+           default # of sensors = 100
+        Args:
+            budgets (list): a list of budgets
+        '''
+        budget_file = open('plot_data64/budget_online', 'w')
+        self.grid_len = 32
+        self.sen_num = 100
+        self.init_transmitters()
+        self.set_priori()
+        self.init_from_real_data('scalability/gl32_s100/cov', 'scalability/gl32_s100/sensors', 'scalability/gl32_s100/hypothesis')
+        for budget in budgets:
+            print(budget, end=',', file=budget_file)
+            start = time.time()
+            self.select_online_greedy_p2(budget, 40)
+            print(time.time()-start, end='\n', file=budget_file)
+
+
+    def scalability_hypothesis_online(self, grid_lens):
+        '''Scalability test of hypothesis for online homo greedy selection.
+           default # of sensors = 100
+           default budget = 20, online need less budget than offline
+        Args:
+            grid_lens (list): a list of grid_lens
+        '''
+        cov_filename = 'scalability/glCAITAO_s100/cov'
+        sensors_filename = 'scalability/glCAITAO_s100/sensors'
+        hypothesis_filename = 'scalability/glCAITAO_s100/hypothesis'
+        hypothesis_file = open('plot_data64/hypothesis_online', 'w')
+        self.sen_num = 100
+        for grid_len in grid_lens:
+            cov = cov_filename.replace('CAITAO', str(grid_len))
+            sensors = sensors_filename.replace('CAITAO', str(grid_len))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(grid_len))
+            self.grid_len = grid_len
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(grid_len*grid_len, end=',', file=hypothesis_file)
+            start = time.time()
+            self.select_online_greedy_p2(20, 40)
+            print(time.time()-start, end='\n', file=hypothesis_file)
+
+
+    def scalability_sensor_online(self, sensor_nums):
+        '''Scalability test of sensor for online homo greedy selection.
+           default # of hypothesis = 32^2 = 1024
+           default budget = 20
+        Args:
+            sensors (list): a list of # of sensors
+        '''
+        cov_filename = 'scalability/gl32_sCAITAO/cov'
+        sensors_filename = 'scalability/gl32_sCAITAO/sensors'
+        hypothesis_filename = 'scalability/gl32_sCAITAO/hypothesis'
+        sensor_file = open('plot_data64/sensor_online', 'w')
+        self.grid_len = 32
+        for sensor_num in sensor_nums:
+            cov = cov_filename.replace('CAITAO', str(sensor_num))
+            sensors = sensors_filename.replace('CAITAO', str(sensor_num))
+            hypothesis = hypothesis_filename.replace('CAITAO', str(sensor_num))
+            self.sen_num = sensor_num
+            self.init_transmitters()
+            self.set_priori()
+            self.init_from_real_data(cov, sensors, hypothesis)
+            print(sensor_num, end=',', file=sensor_file)
+            start = time.time()
+            self.select_online_greedy_p2(20, 40)
             print(time.time()-start, end='\n', file=sensor_file)
 
 
@@ -1912,9 +2066,14 @@ def main():
     selectsensor = SelectSensor('config.json')
 
     #real data
-    selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data32/homogeneous/cov', 'data32/homogeneous/sensors', 'data32/homogeneous/hypothesis')
+
+    selectsensor.scalability_budget('CPU', [1, 5])#, 10, 20, 30, 40, 50, 60, 70, 80])
+    selectsensor.scalability_hypothesis('CPU', [16, 24])#, 32, 40, 48, 56, 64, 72, 80])
+    selectsensor.scalability_sensor('CPU', [50, 100])#, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+
     #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
-    plots.figure_2a(selectsensor)
+    #plots.figure_2a(selectsensor)
     #plots.figure_2a(selectsensor)
     #selectsensor.init_from_real_data('data2/homogeneous/cov', 'data2/homogeneous/sensors', 'data2/homogeneous/hypothesis')
     #selectsensor.scalability_budget([90])
