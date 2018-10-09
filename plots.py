@@ -107,26 +107,26 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    filename_acc = 'plot_data64/online_random_hetero/acc_CAITAO.csv'
-    for i in range(20):
-        start = time.time()
-        plot_data = selectsensor.select_online_random_hetero(80, 40, -1)
-        print('random:', time.time()-start)
-        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+    #filename_acc = 'plot_data64/online_random_hetero/acc_CAITAO.csv'
+    #for i in range(20):
+    #    start = time.time()
+    #    plot_data = selectsensor.select_online_random_hetero(80, 40, -1)
+    #    print('random:', time.time()-start)
+    #    save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
     filename_acc = 'plot_data64/online_nearest_hetero/acc_CAITAO.csv'
-    for i in range(12):
+    for i in range(12, 20):
         start = time.time()
-        plot_data = selectsensor.select_online_nearest_hetero(30, 30, -1)
+        plot_data = selectsensor.select_online_nearest_hetero(10, 30, -1)
         print('nearest:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
-    #filename_acc = 'plot_data16/online_greedy_hetero/acc_CAITAO.csv'
-    #for i in range(3):
-    #    start = time.time()
-    #    plot_data = selectsensor.select_online_greedy_hetero(3, 4, -1) # 32 grid: 378
-    #    print('greedy:', time.time()-start)
-    #    save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
+    filename_acc = 'plot_data64/online_greedy_hetero/acc_CAITAO.csv'
+    for i in range(20):
+        start = time.time()
+        plot_data = selectsensor.select_online_greedy_hetero(8, 25, -1) # 32 grid: 378
+        print('greedy:', time.time()-start)
+        save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
 
 if __name__ == '__main__':
