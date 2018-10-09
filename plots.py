@@ -107,17 +107,17 @@ def figure_2b(selectsensor):
        Online + Heterogeneous
        Algorithm - greedy + nearest + random
     '''
-    filename_acc = 'plot_data64/online_random_hetero/acc_CAITAO.csv'
-    for i in range(20):
+    filename_acc = 'plot_data16/online_random_hetero/acc_CAITAO.csv'
+    for i in range(1):
         start = time.time()
-        plot_data = selectsensor.select_online_random_hetero(80, 40, -1)
+        plot_data = selectsensor.select_online_random_hetero(4, 4, -1)
         print('random:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
-    filename_acc = 'plot_data64/online_nearest_hetero/acc_CAITAO.csv'
-    for i in range(12):
+    filename_acc = 'plot_data16/online_nearest_hetero/acc_CAITAO.csv'
+    for i in range(1):
         start = time.time()
-        plot_data = selectsensor.select_online_nearest_hetero(30, 30, -1)
+        plot_data = selectsensor.select_online_nearest_hetero(4, 4, -1)
         print('nearest:', time.time()-start)
         save_data(plot_data, filename_acc.replace('CAITAO', str(i)))
 
