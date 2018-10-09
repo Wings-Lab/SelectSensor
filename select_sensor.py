@@ -1201,17 +1201,16 @@ class SelectSensor:
         '''
         if true_index == -1:
             random.seed()
+            np.random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
         self.set_priori()
-        random.seed(1)
-        np.random.seed(2)
         true_transmitter = self.transmitters[true_index] # in online selection, there is one true transmitter somewhere
         print('\ntrue transmitter', true_transmitter)
         subset_index = []
         complement_index = [i for i in range(self.sen_num)]
         start = time.time()
-        #discretize_x = self.discretize2(bin_num=100, cores=cores)  # discretize2 for repeating experiment
-        discretize_x = self.discretize3(bin_num=100, cores=cores)   # discretize3 for scalability test
+        discretize_x = self.discretize2(bin_num=100, cores=cores)  # discretize2 for repeating experiment
+        #discretize_x = self.discretize3(bin_num=100, cores=cores)   # discretize3 for scalability test
         print('discretize x', time.time() - start)
         cost = 0
         subset_to_compute = []
@@ -1235,7 +1234,7 @@ class SelectSensor:
             self.update_hypothesis(true_transmitter, subset_index)
             #self.print_grid(self.grid_priori)
             cost += 1
-        return  # for scalability test, don't need to compute the accuracy, so return here
+        #return  # for scalability test, don't need to compute the accuracy, so return here
         subset_results = Parallel(n_jobs=cores, verbose=60)(delayed(self.inner_online_accuracy)(true_transmitter, subset_index) \
                                                 for subset_index in subset_to_compute)
 
@@ -2083,7 +2082,8 @@ def main():
     '''main
     '''
     selectsensor = SelectSensor('config.json')
-    selectsensor.init_from_real_data('data16/heterogeneous/cov', 'data16/heterogeneous/sensors', 'data16/heterogeneous/hypothesis')
+    selectsensor.init_from_real_data('data64/heterogeneous/cov', 'data64/heterogeneous/sensors', 'data64/heterogeneous/hypothesis')
+    #selectsensor.init_from_real_data('data64/homogeneous/cov', 'data64/homogeneous/sensors', 'data64/homogeneous/hypothesis')
     plots.figure_2b(selectsensor)
 
 
