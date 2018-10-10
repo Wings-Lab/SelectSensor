@@ -1612,11 +1612,10 @@ class SelectSensor:
         '''
         if true_index == -1:
             random.seed()
+            np.random.seed()
             true_index = random.randint(0, self.grid_len * self.grid_len)
 
         self.set_priori()
-        random.seed(5)
-        np.random.seed(5)
         true_transmitter = self.transmitters[true_index]         # in online selection, there is true transmitter somewhere
         print('true transmitter', true_transmitter)
         subset_index = []
